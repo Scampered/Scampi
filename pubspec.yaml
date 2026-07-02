@@ -1,0 +1,125 @@
+name: scampi
+description: "Scampi — offline-first calorie, nutrition, exercise, weight and fasting tracker."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Local storage
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  path_provider: ^2.1.3
+  shared_preferences: ^2.2.3
+
+  # UI / charts / animation
+  fl_chart: ^0.68.0
+  percent_indicator: ^4.2.3
+  flutter_svg: ^2.0.10+1
+  lottie: ^3.1.2
+
+  # Utility
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  collection: ^1.18.0
+
+  # Image / clipboard (for AI Meal Import)
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.0
+  share_plus: ^10.1.2
+
+  # CSV/JSON food pack import
+  csv: ^6.0.0
+
+  # In-app update system (GitHub-releases-based, since the app isn't on
+  # the Play Store): http for fetching version.json/downloading the APK,
+  # package_info_plus to read the installed version, open_filex to hand
+  # the downloaded APK to the system installer.
+  http: ^1.2.2
+  package_info_plus: ^8.1.2
+  open_filex: ^4.5.0
+
+  # Local notifications (fasting completion, etc.) — no server/FCM
+  # involved, purely on-device scheduling, consistent with offline-first.
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
+  # Device location for the Ramadan Suhoor/Iftar prayer-time estimate —
+  # only used to get lat/lng for an on-device astronomical calculation
+  # (see prayer_time_calculator.dart), never sent anywhere.
+  geolocator: ^13.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_native_splash: ^2.4.3
+  flutter_launcher_icons: ^0.14.2
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icons/
+    - assets/images/
+    - assets/db/
+
+  # Dosis, bundled locally rather than fetched at runtime via google_fonts.
+  # This app is offline-first — relying on google_fonts' network fetch
+  # meant the very first run (or any run without connectivity) silently
+  # fell back to the system font instead of Dosis, which is also why
+  # "bold" wasn't actually rendering as Dosis's bold weight. Dosis[wght].ttf
+  # is a variable font — registering the same asset at multiple `weight:`
+  # entries lets Flutter/Skia pick the right instance for each FontWeight.
+  fonts:
+    - family: Dosis
+      fonts:
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 200
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 300
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/Dosis-Variable.ttf
+          weight: 800
+
+# Native (pre-Flutter-frame) splash screen config — run
+# `dart run flutter_native_splash:create` after changing this to regenerate
+# the Android/iOS platform splash resources. Uses the padded logo (extra
+# transparent margin) because the Android 12+ Splash Screen API crops/masks
+# anything that extends too close to the edges of a full-bleed image.
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/images/scampi_logo_padded.png
+  color_dark: "#15191B"
+  image_dark: assets/images/scampi_logo_padded.png
+  android_12:
+    image: assets/images/scampi_logo_padded.png
+    color: "#FFFFFF"
+    image_dark: assets/images/scampi_logo_padded.png
+    color_dark: "#15191B"
+
+# Launcher (home screen) icon config — run
+# `dart run flutter_launcher_icons` after changing this to regenerate the
+# Android mipmap/adaptive-icon resources. adaptive_icon_foreground uses the
+# padded logo for the same reason as the splash screen above (adaptive icon
+# masks crop full-bleed content).
+flutter_launcher_icons:
+  android: true
+  image_path: assets/images/scampi_logo.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/images/scampi_logo_padded.png
