@@ -41,6 +41,7 @@ const Map<String, String> kCategoryEmoji = {
   'Generic Ingredients': '🧂',
   'Snacks': '🍿',
   'Traditional Meals': '🍲',
+  'Sandwiches': '🥪',
 };
 
 const String kDefaultFoodEmoji = '🍽️';
@@ -156,9 +157,17 @@ const Map<String, String> _foodEmoji = {
   'cola (regular)': '🥤',
   'laban (buttermilk)': '🥛',
   'mango lassi': '🥤',
-  'beer (lager)': '🍺',
   'apfelschorle': '🧃',
   'water': '💧',
+  'energy drink': '🥫',
+  'apple juice': '🧃',
+  'watermelon juice': '🧃',
+  'pomegranate juice': '🧃',
+  'chocolate milkshake': '🥤',
+  'vanilla milkshake': '🥤',
+  'strawberry milkshake': '🥤',
+  'mango smoothie': '🥤',
+  'mixed berry smoothie': '🥤',
 
   // Snacks
   'almonds': '🌰',
@@ -181,7 +190,7 @@ const Map<String, String> _foodEmoji = {
   'mansaf': '🍲',
   'falafel': '🧆',
   'kabsa (chicken)': '🍛',
-  "schnitzel (pork, breaded)": '🍗',
+  'chicken schnitzel (breaded)': '🍗',
   'sauerbraten': '🍖',
   'bratwurst': '🌭',
   'sauerkraut': '🥬',
@@ -242,4 +251,31 @@ const Map<String, String> _foodEmoji = {
   'mhadjeb': '🫓',
   'chakhchoukha': '🍲',
   'zlabia': '🍥',
+
+  // More fruits & vegetables
+  'coconut (fresh)': '🥥',
+  'dragon fruit': '🐉',
+  'lychee': '🍒',
+  'kiwi': '🥝',
+  'avocado': '🥑',
+  'papaya': '🫛',
+  'sweet potato (cooked)': '🍠',
+  'pumpkin (cooked)': '🎃',
+
+  // Snacks / baked goods
+  'chocolate wafer bar': '🍫',
+  'digestive biscuits': '🍪',
+  'tea biscuits (rusk)': '🍪',
+  'granola bar': '🍫',
+
+  // Generic ingredients (more)
+  'oatmeal (cooked)': '🥣',
+  'beef bacon': '🥓',
+
+  // Sandwiches
+  'chicken sandwich': '🥪',
+  'beef sandwich': '🥪',
+  'egg sandwich': '🥪',
+  'cheese sandwich': '🥪',
+  'club sandwich (chicken)': '🥪',
 };

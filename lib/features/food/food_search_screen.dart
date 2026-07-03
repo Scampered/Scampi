@@ -318,10 +318,23 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
         ),
         actions: [
           if (!widget.pickerMode)
-            IconButton(
-              tooltip: 'Ask AI to add a food',
-              icon: const Icon(Icons.auto_awesome_rounded),
-              onPressed: _openAiImport,
+            Padding(
+              padding: const EdgeInsets.only(right: ScampiSpacing.sm),
+              child: Tooltip(
+                message: 'Ask AI to add a food',
+                child: Material(
+                  color: ScampiColors.orange.withValues(alpha: 0.16),
+                  borderRadius: ScampiRadius.smBorder,
+                  child: InkWell(
+                    onTap: _openAiImport,
+                    borderRadius: ScampiRadius.smBorder,
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(Icons.auto_awesome_rounded, color: ScampiColors.orange, size: 22),
+                    ),
+                  ),
+                ),
+              ),
             ),
           if (_controller.text.isNotEmpty)
             IconButton(
@@ -543,7 +556,10 @@ class _DefaultList extends StatelessWidget {
             ),
             for (final category in categories)
               _CategoryTile(
-                label: category,
+                // "Generic Ingredients" overflows the tile at this width
+                // — shortened just for display; the underlying category
+                // value used for filtering is untouched.
+                label: category == 'Generic Ingredients' ? 'Generic' : category,
                 emoji: emojiForCategory(category),
                 selected: category == selectedCategoryLabel,
                 onTap: () => onTapCategory(category, [category]),

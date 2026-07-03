@@ -50,6 +50,27 @@ Rules:
 ''';
 }
 
+/// Builds the prompt for a text-only description (no photo) — e.g. "100g
+/// grilled prawns, 200g rice, 20ml garlic sauce" for something not on the
+/// menu and not worth photographing. Same JSON reply shape as
+/// [buildMealImportPrompt] so it reuses the same parser/review UI.
+String buildTextMealImportPrompt(String description) {
+  return '''
+I'm using an offline nutrition tracking app. Based on this description of my meal, break it down into its distinct ingredients/components and estimate the nutrition for each:
+
+"${description.trim()}"
+
+Respond with ONLY a single JSON object, no markdown formatting, no code fences, no explanation — just the raw JSON, in exactly this shape:
+
+{"meal_name": "string", "ingredients": [{"name": "string", "category": "string", "grams": number, "calories_per_100g": number, "protein_per_100g": number, "carbs_per_100g": number, "fat_per_100g": number}]}
+
+Rules:
+- Use the quantities I gave (grams, ml, "small"/"large" etc.) to estimate a realistic gram amount for each ingredient — convert ml/portions to grams as needed.
+- All calories_per_100g/protein_per_100g/carbs_per_100g/fat_per_100g values are per 100 grams of that ingredient, using your best estimate from standard nutrition data.
+- "category" should be a short common category like Fruits, Vegetables, Dairy, Meat, Fish, Bread, Rice, Pasta, Desserts, Drinks, Snacks, Fast Food, or Traditional Meals.
+''';
+}
+
 /// A parsed single-food AI response, editable before saving.
 class ParsedFoodDraft {
   ParsedFoodDraft({

@@ -1,7 +1,7 @@
 name: scampi
 description: "Scampi — offline-first calorie, nutrition, exercise, weight and fasting tracker."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -56,6 +56,14 @@ dependencies:
   # only used to get lat/lng for an on-device astronomical calculation
   # (see prayer_time_calculator.dart), never sent anywhere.
   geolocator: ^13.0.2
+
+  # Reads steps + sleep sessions from Android Health Connect — the
+  # on-device hub that Google Fit, Samsung Health, and most wearable
+  # apps already write into, so this covers "any health app" without
+  # Scampi needing per-vendor integrations. Purely local reads, no
+  # network call, consistent with offline-first.
+  health: ^11.1.1
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

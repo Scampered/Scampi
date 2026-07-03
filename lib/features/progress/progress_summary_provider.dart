@@ -51,6 +51,7 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
         )
       : null;
   final calorieGoal = (calculation?.dailyCalorieGoal ?? 2000).round();
+  final resetMinuteOfDay = profile?.calorieResetMinuteOfDay ?? 0;
 
   final today = DateTime.now();
   final todayStart = DateTime(today.year, today.month, today.day);
@@ -59,7 +60,7 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
   final weeklyCalories = <DailyCalorieProgress>[];
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
-    final totals = await foodLogRepo.totalsForDay(day);
+    final totals = await foodLogRepo.totalsForDay(day, resetMinuteOfDay: resetMinuteOfDay);
     weeklyCalories.add(DailyCalorieProgress(day: day, consumed: totals.calories, goal: calorieGoal));
   }
 

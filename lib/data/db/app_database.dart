@@ -43,6 +43,7 @@ class AppDatabase {
           await db.execute(statement);
         }
         await seedInitialFoods(db);
+        await seedMoreFoodsV2(db);
       },
       onUpgrade: _onUpgrade,
     );
@@ -99,6 +100,37 @@ class AppDatabase {
       // calorie ring's sleep arc.
       await db.execute(ScampiSchema.createSleepLog);
       await db.execute(ScampiSchema.createSleepLogDateIndex);
+    }
+
+    if (oldVersion < 5) {
+      // v5 removes pork/alcohol items from the seed database (already
+      // dropped from seed_foods.dart for fresh installs — this cleans up
+      // installs that seeded before that change). Only targets the
+      // original seeded rows, never a user's own custom foods, even if
+      // one happens to share a name.
+      await db.delete(
+        'foods',
+        where: "source_pack_id = 'seed_v1' AND name IN (?, ?)",
+        whereArgs: ['Beer (lager)', 'Schnitzel (pork, breaded)'],
+      );
+    }
+
+    if (oldVersion < 6) {
+      // v6 adds a second batch of seed foods (more fruits/vegetables,
+      // energy drinks, milkshakes/smoothies, biscuits, sandwiches, etc.)
+      // for installs that already seeded before this batch existed.
+      await seedMoreFoodsV2(db);
+    }
+
+    if (oldVersion < 7) {
+      // v7 adds: user_profile.calorie_reset_minute_of_day — lets the
+      // user pick when their "day" rolls over for calorie/water/
+      // exercise/sleep tracking (e.g. 3:30am instead of midnight, for
+      // late sleepers), instead of always assuming midnight. Full
+      // minute precision, not just whole hours.
+      await db.execute(
+        'ALTER TABLE user_profile ADD COLUMN calorie_reset_minute_of_day INTEGER NOT NULL DEFAULT 0;',
+      );
     }
   }
 

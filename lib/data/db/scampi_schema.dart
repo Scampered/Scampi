@@ -32,7 +32,8 @@ class ScampiSchema {
       goal_mode TEXT NOT NULL,
       custom_daily_offset INTEGER NOT NULL DEFAULT 0,
       units_system TEXT NOT NULL DEFAULT 'metric',
-      water_goal_ml INTEGER NOT NULL DEFAULT 2500
+      water_goal_ml INTEGER NOT NULL DEFAULT 2500,
+      calorie_reset_minute_of_day INTEGER NOT NULL DEFAULT 0
     );
   ''';
 

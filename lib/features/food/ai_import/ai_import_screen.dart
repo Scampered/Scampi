@@ -101,10 +101,17 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
 
   Future<void> _shareToAi() async {
     final image = _image;
-    if (image == null) return;
-    final prompt = buildMealImportPrompt(notes: _notesController.text);
-    await Clipboard.setData(ClipboardData(text: prompt));
-    await shareAiPhoto(image, prompt);
+    if (image != null) {
+      final prompt = buildMealImportPrompt(notes: _notesController.text);
+      await Clipboard.setData(ClipboardData(text: prompt));
+      await shareAiPhoto(image, prompt);
+    } else {
+      final description = _notesController.text.trim();
+      if (description.isEmpty) return;
+      final prompt = buildTextMealImportPrompt(description);
+      await Clipboard.setData(ClipboardData(text: prompt));
+      await shareAiText(prompt);
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -232,10 +239,11 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
           padding: const EdgeInsets.all(ScampiSpacing.md),
           children: [
             Text(
-              'Snap or choose a photo of the food, share it to ChatGPT, Claude, or '
-              'Gemini, then paste the reply back here. If the photo shows more than '
-              "one item, they'll come back as separate ingredients. Nothing leaves "
-              'this app automatically — you control the share and the paste.',
+              'Snap or choose a photo, or just describe what you ate if it\'s not '
+              'worth a picture — either way, share it to ChatGPT, Claude, or Gemini, '
+              'then paste the reply back here. Multiple items come back as separate '
+              'ingredients. Nothing leaves this app automatically — you control the '
+              'share and the paste.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: ScampiSpacing.md),
@@ -243,9 +251,13 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
             const SizedBox(height: ScampiSpacing.sm),
             TextField(
               controller: _notesController,
+              onChanged: (_) => setState(() {}),
+              maxLines: _image == null ? 3 : 1,
               decoration: InputDecoration(
-                labelText: 'Extra details (optional)',
-                hintText: 'e.g. no sauce, large portion',
+                labelText: _image == null ? 'Describe your food' : 'Extra details (optional)',
+                hintText: _image == null
+                    ? 'e.g. 100g grilled prawns small, 200g rice, 20ml garlic sauce'
+                    : 'e.g. no sauce, large portion',
                 border: OutlineInputBorder(borderRadius: ScampiRadius.smBorder),
               ),
             ),
@@ -253,9 +265,11 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _image == null ? null : _shareToAi,
+                onPressed: _image != null || _notesController.text.trim().isNotEmpty
+                    ? _shareToAi
+                    : null,
                 icon: const Icon(Icons.ios_share_rounded),
-                label: const Text('Share Photo to AI App'),
+                label: Text(_image != null ? 'Share Photo to AI App' : 'Share to AI App'),
               ),
             ),
             const SizedBox(height: ScampiSpacing.lg),

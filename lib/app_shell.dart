@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
+import 'core/health/health_sync_controller.dart';
+import 'core/health/health_sync_service.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/update/update_provider.dart';
 import 'core/update/update_screen.dart';
 import 'core/update/update_service.dart';
+import 'data/repositories/data_refresh_signal.dart';
+import 'data/repositories/repository_providers.dart';
 import 'features/home/home_screen.dart';
 import 'features/food/food_screen.dart';
 import 'features/fitness/fitness_screen.dart';
@@ -48,6 +52,25 @@ class _AppShellState extends ConsumerState<AppShell> {
     // update check should never be the thing that interrupts opening
     // the app. Only acts if an update is actually available.
     WidgetsBinding.instance.addPostFrameCallback((_) => _silentCheckForUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _silentHealthSync());
+  }
+
+  /// Best-effort, silent Health Connect sync on app open — only runs if
+  /// the user opted in via Profile settings, and never surfaces an error
+  /// (no Health Connect installed, no permission, etc. just means
+  /// nothing gets synced this time).
+  Future<void> _silentHealthSync() async {
+    try {
+      final enabled = ref.read(healthSyncEnabledProvider);
+      if (!enabled) return;
+      final profile = await ref.read(userProfileRepositoryProvider).getProfile();
+      if (profile == null) return;
+      await HealthSyncService.instance.syncToday(bodyWeightKg: profile.weightKg);
+      if (mounted) ref.read(dataRefreshSignalProvider.notifier).bump();
+    } catch (_) {
+      // Silent — health sync is a nice-to-have, never worth interrupting
+      // app startup over.
+    }
   }
 
   Future<void> _silentCheckForUpdate() async {

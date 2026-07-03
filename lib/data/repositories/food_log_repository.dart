@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../../core/utils/day_boundary.dart';
 import '../db/app_database.dart';
 import '../models/food.dart';
 import '../models/food_log_entry.dart';
@@ -23,16 +24,16 @@ class FoodLogRepository {
   }
 
   /// All entries logged on the given calendar day (local time), ordered
-  /// by when they were logged.
-  Future<List<FoodLogEntry>> entriesForDay(DateTime day) async {
+  /// by when they were logged. [resetMinuteOfDay] shifts what counts as "today"
+  /// — see [dayWindowFor] — defaulting to plain midnight.
+  Future<List<FoodLogEntry>> entriesForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
     final db = await _db;
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
+    final window = dayWindowFor(day, resetMinuteOfDay);
 
     final rows = await db.query(
       'food_log',
       where: 'logged_at >= ? AND logged_at < ?',
-      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      whereArgs: [window.start.toIso8601String(), window.end.toIso8601String()],
       orderBy: 'logged_at ASC',
     );
     return rows.map(FoodLogEntry.fromMap).toList();
@@ -40,8 +41,8 @@ class FoodLogRepository {
 
   /// Summed nutrition totals for the given day — what the Home screen's
   /// calorie ring and macro bars are driven by.
-  Future<FoodNutrition> totalsForDay(DateTime day) async {
-    final entries = await entriesForDay(day);
+  Future<FoodNutrition> totalsForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
+    final entries = await entriesForDay(day, resetMinuteOfDay: resetMinuteOfDay);
     return entries.fold<FoodNutrition>(
       FoodNutrition.zero,
       (acc, e) => acc +

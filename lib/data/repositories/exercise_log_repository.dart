@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../../core/utils/day_boundary.dart';
 import '../db/app_database.dart';
 import '../models/exercise_log_entry.dart';
 
@@ -20,22 +21,21 @@ class ExerciseLogRepository {
     await db.delete('exercise_log', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<ExerciseLogEntry>> entriesForDay(DateTime day) async {
+  Future<List<ExerciseLogEntry>> entriesForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
     final db = await _db;
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
+    final window = dayWindowFor(day, resetMinuteOfDay);
 
     final rows = await db.query(
       'exercise_log',
       where: 'logged_at >= ? AND logged_at < ?',
-      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      whereArgs: [window.start.toIso8601String(), window.end.toIso8601String()],
       orderBy: 'logged_at ASC',
     );
     return rows.map(ExerciseLogEntry.fromMap).toList();
   }
 
-  Future<double> totalCaloriesBurnedForDay(DateTime day) async {
-    final entries = await entriesForDay(day);
+  Future<double> totalCaloriesBurnedForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
+    final entries = await entriesForDay(day, resetMinuteOfDay: resetMinuteOfDay);
     return entries.fold<double>(0, (sum, e) => sum + e.caloriesBurned);
   }
 }

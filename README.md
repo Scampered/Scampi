@@ -1,61 +1,14 @@
 # Scampi 🦐
 
-Offline-first calorie, nutrition, exercise, weight, and fasting tracker.
-No accounts, no login, no cloud, no subscriptions — everything lives on
-the device.
+Offline-first calorie, nutrition, exercise, weight, sleep, and fasting
+tracker. No accounts, no login, no cloud, no subscriptions — everything
+lives on the device. Distributed as a sideloaded APK via GitHub Releases
+(not the Play Store), with a built-in self-updater.
 
-This README documents what's built, how to run it, and what's planned
-next. It's written assuming you (or a future session of Claude) need to
-pick this project back up without extra context.
+## Status: v1.1.0 — feature-complete for daily use
 
-## Status: Phase 2 of N
-
-**Phase 1 (done):** project skeleton, Material 3 theme (light/dark +
-system toggle), 5-tab bottom nav shell, Home screen UI.
-
-**Phase 2 (done, this update):**
-- Full SQLite schema (`lib/data/db/scampi_schema.dart`) — user profile,
-  foods (indexed for 50,000+ rows), food packs tracking, meals/meal
-  items, food/exercise/water/weight logs, fasting sessions
-- `AppDatabase` singleton managing open/create/migrate lifecycle, with a
-  documented migration pattern for future schema changes
-- Calorie/macro calculation engine (`calorie_calculator.dart`):
-  Mifflin-St Jeor BMR, TDEE via activity multipliers, goal-mode calorie
-  offsets, a bodyweight-anchored macro split, and health warnings for
-  unsafe targets (too-low calories, aggressive deficits/surpluses, low
-  protein)
-- Seed food database: ~133 real foods across all requested categories
-  (Fruits, Vegetables, Dairy, Meat, Fish, Rice, Pasta, Bread, Desserts,
-  Fast Food, Drinks, Snacks, Traditional Meals, Generic Ingredients) and
-  regions (Pakistan, Bahrain, Germany, Algeria, Middle East, South Asia,
-  Europe, Global) — see the note on scaling below
-- Food-pack importer (`food_pack_importer.dart`): JSON and CSV import,
-  validates rows, dedupes against existing data by normalized
-  name+category+region, merges via a single batched insert (fast even
-  at thousands of rows), tracks applied packs so re-importing is a safe
-  no-op
-- Full repository layer: `UserProfileRepository`, `FoodRepository`,
-  `FoodLogRepository`, `ExerciseLogRepository`, `WaterLogRepository`,
-  `WeightLogRepository`, `FastingRepository`
-- Riverpod wiring: repository providers, a `dataRefreshSignalProvider`
-  invalidation pattern (bump after any write, dependent providers
-  refetch), `homeSummaryProvider` aggregating everything Home needs
-- Onboarding flow: first-run profile setup form (age, sex, height,
-  weight, goal weight, activity level, goal mode, units), gated in
-  `OnboardingGate` so the app shows onboarding until a profile exists
-- Profile tab now shows the real saved profile, calculated BMR/
-  maintenance/goal calories, and an Edit Profile flow (reuses the
-  onboarding form pre-filled)
-- Home screen is now fully wired to real data — calorie ring, macro
-  bars, water/weight/fasting tiles, and the Add Water quick action all
-  read from and write to SQLite. `home_mock_data.dart` has been deleted.
-
-**Not yet built:** food search/logging UI (the Food tab is still a
-placeholder — `FoodRepository.search` exists and works, just has no
-screen yet), custom food creator UI, favorites/recents UI, meal builder,
-fitness logging UI, fasting start/stop UI, water/weight history entry
-beyond the quick-add button, AI Meal Import parsing UI, Progress charts,
-notifications, native widgets.
+All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
+and wired to real SQLite data. See "What's built" below for the full list.
 
 ## Getting set up
 
@@ -64,154 +17,199 @@ flutter pub get
 cp android/local.properties.example android/local.properties
 # edit android/local.properties with your sdk.dir and flutter.sdk paths
 flutter analyze
-flutter run            # needs a connected device or emulator
-flutter build apk --debug
+flutter run                    # needs a connected device or emulator
+flutter build apk --debug      # or --release for a real build
 ```
 
-On first launch with a fresh install, you'll see the onboarding form
-before the main app — fill it in once and it persists in SQLite from
-then on (uninstalling/clearing app data resets this, as expected for a
-fully local, no-account app).
+On first launch you'll see onboarding (name, age, sex, height, weight,
+goal weight, activity level, goal mode) before the main app — it's
+stored in SQLite from then on. Uninstalling/clearing app data resets
+this, as expected for a fully local, no-account app.
+
+## What's built
+
+**Food** — search/browse ~180 seed foods across Fruits, Vegetables,
+Dairy, Meat, Fish, Rice, Pasta, Bread, Desserts, Fast Food, Sandwiches,
+Drinks, Snacks, Traditional Meals, Generic Ingredients (Pakistan,
+Bahrain, Germany, Algeria, Middle East, South Asia, Europe, Global —
+no pork or alcohol); custom food creator + edit/delete for "Your
+Ingredients"; meal builder; AI import (photo *or* typed description,
+share-sheet workflow to ChatGPT/Claude/Gemini, paste the JSON reply
+back — decomposes composite dishes into separate ingredients).
+
+**Fitness** — exercise logging with MET-based calorie estimates,
+pace-adjusted for distance-trackable categories (walking/running/
+cycling/swimming/hiking) so a faster session burns more than a slower
+one of the same duration.
+
+**Home dashboard** — calorie ring with an inner water arc and an outer
+semicircle sleep arc (only shown once sleep tracking is actually in
+use — see below); water droplet tile with quick-add chips and a full
+log/edit/delete sheet; weight check-in; fasting tile; daily tip.
+
+**Sleep** — manual bedtime/wake-time entry (editable, not just
+add-only); optional Health Connect auto-sync (see below). The sleep
+arc/stat on the ring auto-hides if there's no entry for today or
+yesterday, so it never gets stuck showing a stale "0h" for someone who
+tried it once and stopped.
+
+**Fasting** — start/end a fast (Ramadan / Intermittent / Custom types),
+duration presets, a "Right Now" button on every time field, live
+elapsed/remaining display that switches to "Day X/Y" for multi-day
+fasts instead of a raw triple-digit hour count, and a local notification
+when the target duration is reached. Ramadan fasts can auto-fill
+Suhoor/Iftar times from an **on-device** astronomical calculation
+(`lib/core/utils/prayer_time_calculator.dart` — Fajr/Maghrib from
+lat/lng/date, no network call) using the device's location.
+
+**Progress** — weekly calorie bar chart, weight trend line (1M/6M
+toggle, real date/weight axes), sleep bar chart (recommended-8h
+reference line, hour axis).
+
+**Health Connect sync** (opt-in, Profile → Health App Connector) —
+reads steps and sleep sessions from Android Health Connect, which
+Google Fit, Samsung Health, and most wearable apps already write into.
+Steps become an auto-logged "Walking" exercise entry (replaced on
+re-sync, never duplicated); sleep only fills in if you haven't already
+logged it that day — a sync never overwrites a manual entry.
+
+**Custom daily reset time** (Profile → Daily Reset Time) — pick when
+"today" rolls over for calorie/water/exercise/sleep tracking instead of
+always assuming midnight, for anyone up late or asleep before it.
+
+**Notifications** — local-only (`flutter_local_notifications`), used
+for the fasting-complete reminder; the infrastructure
+(`lib/core/notifications/notification_service.dart`) is reusable for
+future notification types.
+
+**Self-update system** — since Scampi isn't on the Play Store, it
+checks `version.json` on GitHub (startup + manual "Check for Updates"
+in Profile), shows current vs. latest version + release notes, and
+downloads/installs the APK via the system installer. See "Shipping a
+new release" below.
 
 ## Architecture
 
 ```
 lib/
-  main.dart                  — entry point, wires ProviderScope + theme
-  onboarding_gate.dart        — shows onboarding or AppShell depending on
-                                 whether a profile exists yet
-  app_shell.dart              — bottom nav + IndexedStack across 5 tabs
+  main.dart                    — entry point, wires ProviderScope + theme
+  onboarding_gate.dart         — shows onboarding or AppShell based on
+                                  whether a profile exists
+  app_shell.dart               — bottom nav + IndexedStack across 5 tabs;
+                                  also fires the silent startup update
+                                  check and Health Connect sync
 
   core/
-    theme/                   — colors, typography, ThemeData, theme mode
-    constants/                — app-wide constants (db name, AppTab enum)
+    theme/                     — colors, typography (Dosis, bundled
+                                  locally — see note below), ThemeData
+    constants/                 — db name/version, AppTab enum
     utils/
-      calorie_calculator.dart — Mifflin-St Jeor + TDEE + goal/macro/warnings
-      dedupe_key.dart          — shared food dedupe key builder (seed + importer)
+      calorie_calculator.dart  — Mifflin-St Jeor + TDEE + goal/macro/warnings
+      day_boundary.dart        — shared "logical today" window given a
+                                  custom reset hour
+      dedupe_key.dart          — shared food dedupe key (seed + importer)
+      food_icons.dart          — category/food emoji lookup
+      prayer_time_calculator.dart — offline Fajr/Maghrib calculation
+    notifications/
+      notification_service.dart — flutter_local_notifications wrapper
+    health/
+      health_service.dart       — Health Connect read wrapper
+      health_sync_controller.dart — persisted opt-in toggle
+      health_sync_service.dart    — steps→exercise, sleep→sleep_log sync
+    update/
+      update_service.dart       — version.json fetch, semver compare,
+                                   APK download + install handoff
+      update_screen.dart, version_info.dart, update_provider.dart
 
   data/
-    models/                  — UserProfile, Food, FoodLogEntry,
-                                ExerciseLogEntry, WaterLogEntry,
-                                WeightLogEntry, FastingSession
+    models/                    — UserProfile, Food, FoodLogEntry,
+                                  ExerciseLogEntry, WaterLogEntry,
+                                  WeightLogEntry, SleepLogEntry,
+                                  FastingSession
     db/
-      scampi_schema.dart      — raw SQL schema, all tables + indexes
-      app_database.dart        — singleton open/create/migrate
-      seed_foods.dart           — ~133 built-in foods, seeded on first run
-      food_pack_importer.dart   — JSON/CSV import, dedupe, merge
-    repositories/             — one repo per table/concern, all reading
-                                 through AppDatabase.instance.database
-      repository_providers.dart — Riverpod Provider<T> wrappers
-      data_refresh_signal.dart  — bump-to-invalidate pattern
+      scampi_schema.dart        — raw SQL schema, all tables + indexes
+      app_database.dart          — singleton open/create/migrate (see
+                                    _onUpgrade for the full version history)
+      seed_foods.dart             — seed food batches (seed_v1, seed_v2)
+      food_pack_importer.dart     — JSON/CSV import, dedupe, merge
+    repositories/               — one repo per table/concern
+      repository_providers.dart  — Riverpod Provider<T> wrappers
+      data_refresh_signal.dart   — bump-to-invalidate pattern
 
   features/
-    home/
-      home_screen.dart         — dashboard UI, now data-driven
-      home_summary_provider.dart — aggregates profile+logs into one
-                                    FutureProvider<HomeDailySummary>
-    onboarding/
-      onboarding_screen.dart   — first-run AND edit-profile form (same
-                                  widget, pass existingProfile to pre-fill)
-    profile/
-      profile_screen.dart       — real profile display + edit entry point
-      current_profile_provider.dart
-    food/, fitness/, progress/  — still placeholders (ComingSoonScaffold)
-
-  shared/
-    widgets/coming_soon_scaffold.dart
+    home/                       — dashboard, calorie ring + arcs, tiles
+    food/                       — search, meal builder, AI import,
+                                    custom ingredient edit/delete
+    fitness/                    — exercise log + entry sheet
+    fasting/                    — start/active fast sheets
+    progress/                   — weekly/weight/sleep charts
+    onboarding/                 — first-run AND edit-profile form
+    profile/                    — profile, Health Connect toggle, daily
+                                    reset time, updates section
 ```
 
 ## Key design decisions worth knowing about
 
-**Search strategy:** `FoodRepository.search` uses an indexed `LIKE '%query%'`
-query rather than SQLite FTS. This is a deliberate simplification — FTS
-virtual tables need triggers to stay in sync with the base table and
-can't be `ALTER TABLE`'d, which adds real complexity for a search
-problem that stays fast well past 50,000 rows with a plain index on
-`name`. Revisit only if search actually feels slow in practice.
+**Search strategy:** `FoodRepository.search` uses an indexed `LIKE
+'%query%'` query rather than SQLite FTS — stays fast well past 50,000
+rows with a plain index on `name`, without the trigger complexity FTS
+virtual tables need to stay in sync.
 
-**Refresh pattern:** rather than wiring sqflite to a reactive stream
-layer, writes call `ref.read(dataRefreshSignalProvider.notifier).bump()`,
-and read-side providers (`homeSummaryProvider`, `currentProfileProvider`)
-`ref.watch` that signal and re-run. Simple, predictable, and appropriate
+**Refresh pattern:** writes call
+`ref.read(dataRefreshSignalProvider.notifier).bump()`, and read-side
+providers `ref.watch` that signal and re-run. Simple and appropriate
 for a single-user local app where writes are infrequent relative to
-reads. If a future screen needs finer-grained invalidation (e.g. only
-refetch the food log, not the whole Home summary), consider splitting
-the signal per-concern rather than replacing the pattern entirely.
+reads.
 
-**Macro split:** protein is computed as grams-per-kilogram of body
-weight (1.8 g/kg normally, 2.0 g/kg during a cut to help preserve
-muscle) rather than as a flat percentage of calories — percentage-based
-splits under-protein lighter individuals in a way that's not actually
-healthy. Fat is ~28% of total calories; carbs take the remainder. This
-is a reasonable general-purpose default, not personalized advice — the
-in-app health warnings exist specifically to flag when a goal pushes
-into genuinely unsafe territory.
+**Dosis font is bundled locally**, not fetched via `google_fonts` at
+runtime — an offline-first app can't depend on a network fetch for its
+own typeface. See `assets/fonts/Dosis-Variable.ttf` and the `fonts:`
+block in `pubspec.yaml`.
 
-**Profile editing preserves the water goal:** `UserProfileRepository.
-saveProfile` uses `ConflictAlgorithm.replace`, which deletes and
-re-inserts the row — if `UserProfile.toMap()` were written as the
-literal map (which doesn't carry `water_goal_ml`, tracked separately),
-every profile edit would silently reset the water goal to its column
-default. The repository explicitly reads and re-applies the existing
-water goal before saving to avoid this. Worth knowing if you ever touch
-that file.
+**Day-boundary math is centralized** in `day_boundary.dart` rather than
+duplicated per-repository, so the custom reset-hour setting only needed
+one new helper threaded through `FoodLogRepository`,
+`ExerciseLogRepository`, and `WaterLogRepository`'s day-range queries.
 
-## Roadmap (remaining phases)
+**Update system uses GitHub Releases, not an API.** `version.json` at
+the repo root points at a tagged release's APK asset — see "Shipping a
+new release" below.
 
-3. Food logging UI: search screen, quantity/grams/servings entry, meal
-   builder, custom food creator UI, favorites/recents UI — the
-   repository layer for all of this already exists
-4. Fitness logging UI — `ExerciseLogRepository` and the MET-based
-   calorie estimate in `ExerciseLogEntry.estimateCalories` already exist
-5. Fasting start/stop UI, water/weight manual history entry — repository
-   layer exists, just needs screens
-6. Progress screen: charts (fl_chart) over the log repositories' history
-   methods
-7. AI Meal Import: prompt template, clipboard copy, paste-and-parse
-8. Notifications — deferred per earlier direction
-9. Native home-screen widgets — deferred, needs on-device testing
+## Shipping a new release
 
-### About the food database
+1. Bump `version:` in `pubspec.yaml` (format `X.Y.Z+buildNumber`).
+2. `flutter build apk --release`
+3. Rename the output APK to `scampi-vX.Y.Z.apk` for clarity.
+4. Update `version.json` at the repo root:
+   ```json
+   {
+     "latest_version": "X.Y.Z",
+     "version_code": <buildNumber>,
+     "apk_url": "https://github.com/Scampered/Scampi/releases/download/vX.Y.Z/scampi-vX.Y.Z.apk",
+     "release_notes": ["..."]
+   }
+   ```
+5. Commit + push `pubspec.yaml`/`pubspec.lock`/`version.json`.
+6. `gh release create vX.Y.Z path/to/scampi-vX.Y.Z.apk --title "vX.Y.Z" --notes "..."`
 
-Per earlier direction, the seed set (~133 foods) is hand-curated from
-standard nutrition references rather than invented, but it's
-intentionally not 2,000–5,000 entries — that scale needs a real sourced
-dataset (USDA FoodData Central or your own pack). The schema and
-`FoodPackImporter` are built to scale to 50,000+ rows without code
-changes: drop a JSON or CSV pack matching the documented shape (see
-the doc comment at the top of `food_pack_importer.dart`) and it merges
-in, deduped against everything already present.
+Anyone with the app installed will see the update prompt automatically
+on next launch (or via Profile → Check for Updates).
 
-## Known gaps / things to verify on next build
+## Known gaps / provisional decisions
 
-- **Fixed this session:** `app_shell.dart` had incorrect `../` relative
-  imports (it's at `lib/app_shell.dart`, so `core/` and `features/` are
-  siblings, not parents) — this would have failed `flutter analyze`.
-  Caught and fixed; every relative import in the project has now been
-  programmatically verified to resolve to a real file.
-- No app icon / launcher icon asset exists yet. `AndroidManifest.xml`
-  references `@mipmap/ic_launcher`, and the mipmap density folders exist
-  but are empty — no PNGs in them. This will fail the build until you
-  either add `flutter_launcher_icons` + a source icon and run
-  `dart run flutter_launcher_icons`, or run `flutter create .` once over
-  the project root to scaffold defaults (don't let it overwrite
-  `AndroidManifest.xml` or `MainActivity.kt` if prompted).
-- This project still hasn't been run through `flutter build apk` (only
-  `flutter analyze`, per your last report). The SQLite layer in
-  particular has only been reviewed, not executed — please run it and
-  paste back the onboarding flow + Home screen behavior, since DB code
-  is the highest-risk-of-runtime-bug part of this phase.
-- `meals` / `meal_items` tables exist in the schema but have no
-  repository or UI yet — intentional groundwork for the Phase 3 meal
-  builder, not a bug.
+- Release builds reuse the debug signing config — fine for a small
+  sideload distribution, not Play-Store-ready.
 - The macro-split and health-warning thresholds in
   `calorie_calculator.dart` are reasonable general defaults, not
-  medical advice — worth a comment in-app eventually, not just in this
-  README.
-- Release builds reuse the debug signing config — fine for development,
-  not for distribution.
-- The theme uses `ColorScheme.surfaceContainerHighest`, a newer Material
-  3 surface role. This needs a reasonably recent Flutter SDK (3.22+ ish)
-  to resolve — if `flutter analyze` flags it as undefined, that's a
-  signal to run `flutter upgrade` rather than a sign something else is
-  wrong.
+  medical advice.
+- Prayer-time calculation is accurate to roughly a minute or two of
+  published times (standard solar-position formulas) — always
+  presented as an editable starting point, never locked in.
+- Health Connect sync runs once per app open, not continuously in the
+  background — no foreground service or WorkManager integration.
+- Native home-screen widgets are not built (deferred; would need a
+  `home_widget`-based native Android `RemoteViews` layer, since there's
+  no way to share Dart logic directly with a widget).
+- Adaptive activity-level suggestions (auto-adjusting based on logged
+  exercise trends) are deferred per product direction — "update your
+  activity level yourself" was judged clearer than an automatic guess.

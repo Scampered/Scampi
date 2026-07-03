@@ -69,4 +69,30 @@ class UserProfileRepository {
       where: 'id = 1',
     );
   }
+
+  /// Minutes past midnight (0–1439) that "today" rolls over at for
+  /// calorie/water/exercise/sleep tracking, defaulting to midnight.
+  /// Full minute precision (e.g. 465 = 7:45am). Kept as its own setter
+  /// (like [setWaterGoalMl]) so Settings can change it without going
+  /// through the full onboarding/edit-profile form.
+  Future<int> getCalorieResetMinuteOfDay() async {
+    final db = await _db;
+    final rows = await db.query(
+      'user_profile',
+      columns: ['calorie_reset_minute_of_day'],
+      where: 'id = 1',
+      limit: 1,
+    );
+    if (rows.isEmpty) return 0;
+    return rows.first['calorie_reset_minute_of_day'] as int? ?? 0;
+  }
+
+  Future<void> setCalorieResetMinuteOfDay(int minuteOfDay) async {
+    final db = await _db;
+    await db.update(
+      'user_profile',
+      {'calorie_reset_minute_of_day': minuteOfDay},
+      where: 'id = 1',
+    );
+  }
 }

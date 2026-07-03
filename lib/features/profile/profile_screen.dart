@@ -5,9 +5,13 @@ import '../../core/theme/theme_mode_controller.dart';
 import '../../core/update/update_provider.dart';
 import '../../core/update/update_screen.dart';
 import '../../core/utils/calorie_calculator.dart';
+import '../../core/health/health_service.dart';
+import '../../core/health/health_sync_controller.dart';
+import '../../core/health/health_sync_service.dart';
 import '../../data/db/app_database.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../../data/repositories/data_refresh_signal.dart';
+import '../../data/repositories/repository_providers.dart';
 import 'current_profile_provider.dart';
 
 /// Profile tab: appearance (theme) settings, and the user's saved
@@ -146,6 +150,10 @@ class ProfileScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 16),
+          const _HealthSyncSection(),
+          const SizedBox(height: 16),
+          const _DailyResetSection(),
+          const SizedBox(height: 16),
           const _UpdatesSection(),
           const SizedBox(height: 16),
           _SectionCard(
@@ -200,6 +208,177 @@ class ProfileScreen extends ConsumerWidget {
       // profile is gone and swap back to onboarding automatically.
       ref.read(dataRefreshSignalProvider.notifier).bump();
     }
+  }
+}
+
+/// "Health App Connector" section: opt-in sync of steps and sleep from
+/// Android Health Connect — the on-device hub that Google Fit, Samsung
+/// Health, and most wearable apps already write into, so this covers
+/// "any health app" without a per-vendor integration. Turning it on
+/// requests Health Connect's own data permissions plus the Activity
+/// Recognition runtime permission (needed for step counts), then syncs
+/// immediately; after that it re-syncs once per app open.
+class _HealthSyncSection extends ConsumerStatefulWidget {
+  const _HealthSyncSection();
+
+  @override
+  ConsumerState<_HealthSyncSection> createState() => _HealthSyncSectionState();
+}
+
+class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
+  bool _connecting = false;
+  String? _error;
+
+  Future<void> _toggle(bool value) async {
+    if (!value) {
+      await ref.read(healthSyncEnabledProvider.notifier).setEnabled(false);
+      return;
+    }
+
+    setState(() {
+      _connecting = true;
+      _error = null;
+    });
+    try {
+      final granted = await HealthService.instance.requestPermissions();
+      if (!granted) {
+        setState(() => _error =
+            "Permission wasn't granted. Make sure Health Connect is installed and try again.");
+        return;
+      }
+      await ref.read(healthSyncEnabledProvider.notifier).setEnabled(true);
+      final profile = await ref.read(userProfileRepositoryProvider).getProfile();
+      if (profile != null) {
+        await HealthSyncService.instance.syncToday(bodyWeightKg: profile.weightKg);
+        ref.read(dataRefreshSignalProvider.notifier).bump();
+      }
+    } catch (e) {
+      setState(() => _error = "Couldn't connect to Health Connect. Is it installed?");
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = ref.watch(healthSyncEnabledProvider);
+    return _SectionCard(
+      title: 'Health App Connector',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sync steps and sleep from Google Fit, Samsung Health, or any '
+            'other app that writes to Android Health Connect. Steps show up '
+            'as an auto-logged Walking entry; sleep fills in automatically '
+            "if you haven't already logged it that day.",
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Connect Health App', style: theme.textTheme.titleSmall),
+              ),
+              if (_connecting)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Switch(value: enabled, onChanged: _toggle),
+            ],
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 4),
+            Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Daily Reset Time" section: lets the user pick which hour "today"
+/// rolls over at for calorie/water/exercise/sleep tracking — defaults to
+/// midnight, but a late sleeper (or early-morning person) can shift it
+/// so a post-midnight snack doesn't get counted as tomorrow's food.
+class _DailyResetSection extends ConsumerStatefulWidget {
+  const _DailyResetSection();
+
+  @override
+  ConsumerState<_DailyResetSection> createState() => _DailyResetSectionState();
+}
+
+class _DailyResetSectionState extends ConsumerState<_DailyResetSection> {
+  int? _resetMinuteOfDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final minuteOfDay =
+        await ref.read(userProfileRepositoryProvider).getCalorieResetMinuteOfDay();
+    if (!mounted) return;
+    setState(() => _resetMinuteOfDay = minuteOfDay);
+  }
+
+  Future<void> _pickTime() async {
+    final current = _resetMinuteOfDay ?? 0;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+      initialEntryMode: TimePickerEntryMode.input,
+    );
+    if (picked == null || !mounted) return;
+    final minuteOfDay = picked.hour * 60 + picked.minute;
+    await ref.read(userProfileRepositoryProvider).setCalorieResetMinuteOfDay(minuteOfDay);
+    ref.read(dataRefreshSignalProvider.notifier).bump();
+    setState(() => _resetMinuteOfDay = minuteOfDay);
+  }
+
+  static String _formatMinuteOfDay(BuildContext context, int minuteOfDay) {
+    if (minuteOfDay == 0) return 'Midnight (12:00 AM)';
+    if (minuteOfDay == 12 * 60) return 'Noon (12:00 PM)';
+    final time = TimeOfDay(hour: minuteOfDay ~/ 60, minute: minuteOfDay % 60);
+    return time.format(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final minuteOfDay = _resetMinuteOfDay;
+    return _SectionCard(
+      title: 'Daily Reset Time',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "When your calorie, water, exercise, and sleep tracking rolls over to a new day. "
+            "Useful if you're up past midnight or asleep before it.",
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          _ProfileStatRow(
+            label: 'Resets at',
+            value: minuteOfDay != null ? _formatMinuteOfDay(context, minuteOfDay) : '—',
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.schedule_rounded),
+              label: const Text('Change Reset Time'),
+              onPressed: minuteOfDay == null ? null : _pickTime,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

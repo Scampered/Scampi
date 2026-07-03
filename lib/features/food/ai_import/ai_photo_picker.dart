@@ -73,3 +73,10 @@ class AiPhotoPicker extends StatelessWidget {
 Future<void> shareAiPhoto(File image, String prompt) async {
   await Share.shareXFiles([XFile(image.path)], text: prompt);
 }
+
+/// Same idea as [shareAiPhoto] but for a text-only description (no
+/// photo) — used when the user just types what they ate instead of
+/// snapping a picture.
+Future<void> shareAiText(String prompt) async {
+  await Share.share(prompt);
+}

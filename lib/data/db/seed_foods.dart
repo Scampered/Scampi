@@ -35,6 +35,31 @@ Future<void> seedInitialFoods(Database db) async {
   await batch.commit(noResult: true);
 }
 
+/// Second batch of seed foods, added after the initial ~150-item set
+/// shipped — kept as its own list/source_pack_id ('seed_v2') so it can
+/// also be inserted into already-seeded databases via a migration
+/// ([AppDatabase]'s v6 upgrade step), not just fresh installs.
+Future<void> seedMoreFoodsV2(Database db) async {
+  final batch = db.batch();
+
+  for (final food in _moreFoodsV2) {
+    final dedupeKey = buildFoodDedupeKey(
+      name: food['name'] as String,
+      category: food['category'] as String,
+      region: food['region'] as String?,
+    );
+    batch.insert('foods', {
+      ...food,
+      'is_custom': 0,
+      'is_favorite': 0,
+      'source_pack_id': 'seed_v2',
+      'dedupe_key': dedupeKey,
+    });
+  }
+
+  await batch.commit(noResult: true);
+}
+
 /// name, category, region, calories/protein/carbs/fat per 100g,
 /// default serving grams + label.
 final List<Map<String, Object?>> _seedFoods = [
@@ -152,7 +177,6 @@ final List<Map<String, Object?>> _seedFoods = [
   _f('Cola (regular)', 'Drinks', 'Global', 42, 0, 10.6, 0, 355, '1 can'),
   _f('Laban (buttermilk)', 'Drinks', 'Middle East', 40, 3.0, 4.8, 1.0, 240, '1 cup'),
   _f('Mango Lassi', 'Drinks', 'South Asia', 95, 2.7, 17, 1.8, 240, '1 cup'),
-  _f('Beer (lager)', 'Drinks', 'Germany', 43, 0.5, 3.6, 0, 355, '1 can'),
   _f('Apfelschorle', 'Drinks', 'Germany', 22, 0, 5.4, 0, 250, '1 glass'),
   _f('Water', 'Drinks', 'Global', 0, 0, 0, 0, 250, '1 cup'),
 
@@ -179,7 +203,7 @@ final List<Map<String, Object?>> _seedFoods = [
   _f('Mansaf', 'Traditional Meals', 'Middle East', 220, 15, 12, 12, 350, '1 plate'),
   _f('Falafel', 'Traditional Meals', 'Middle East', 333, 13, 32, 18, 60, '4 pieces'),
   _f('Kabsa (chicken)', 'Traditional Meals', 'Middle East', 180, 10, 21, 6, 350, '1 plate'),
-  _f('Schnitzel (pork, breaded)', 'Traditional Meals', 'Germany', 270, 22, 12, 15, 150, '1 piece'),
+  _f('Chicken Schnitzel (breaded)', 'Traditional Meals', 'Germany', 250, 24, 12, 12, 150, '1 piece'),
   _f('Sauerbraten', 'Traditional Meals', 'Germany', 220, 24, 8, 10, 200, '1 serving'),
   _f('Bratwurst', 'Traditional Meals', 'Germany', 296, 12, 2, 27, 100, '1 sausage'),
   _f('Sauerkraut', 'Traditional Meals', 'Germany', 19, 0.9, 4.3, 0.1, 100, '1/2 cup'),
@@ -243,6 +267,47 @@ final List<Map<String, Object?>> _seedFoods = [
   _f('Mhadjeb', 'Bread', 'Algeria', 250, 6, 35, 9, 120, '1 piece'),
   _f('Chakhchoukha', 'Traditional Meals', 'Algeria', 170, 8, 20, 6, 300, '1 bowl'),
   _f('Zlabia', 'Desserts', 'Algeria', 360, 2, 58, 13, 40, '3 pieces'),
+];
+
+/// Second seed batch — see [seedMoreFoodsV2].
+final List<Map<String, Object?>> _moreFoodsV2 = [
+  // ---------------- MORE FRUITS & VEGETABLES ----------------
+  _f('Coconut (fresh)', 'Fruits', 'South Asia', 354, 3.3, 15, 33, 80, '1/2 cup shredded'),
+  _f('Dragon Fruit', 'Fruits', 'Global', 60, 1.2, 13, 0.4, 100, '1/2 fruit'),
+  _f('Lychee', 'Fruits', 'South Asia', 66, 0.8, 17, 0.4, 100, '10 fruits'),
+  _f('Kiwi', 'Fruits', 'Global', 61, 1.1, 15, 0.5, 76, '1 medium'),
+  _f('Avocado', 'Fruits', 'Global', 160, 2, 9, 15, 150, '1 medium'),
+  _f('Papaya', 'Fruits', 'South Asia', 43, 0.5, 11, 0.3, 145, '1 cup cubed'),
+  _f('Sweet Potato (cooked)', 'Vegetables', 'Global', 90, 2, 21, 0.1, 130, '1 medium'),
+  _f('Pumpkin (cooked)', 'Vegetables', 'Global', 20, 0.7, 5, 0.1, 245, '1 cup'),
+
+  // ---------------- ENERGY DRINKS, JUICES, SHAKES ----------------
+  _f('Energy Drink', 'Drinks', 'Global', 45, 0, 11, 0, 250, '1 can'),
+  _f('Apple Juice', 'Drinks', 'Global', 46, 0.1, 11, 0.1, 248, '1 cup'),
+  _f('Watermelon Juice', 'Drinks', 'Global', 30, 0.6, 7.5, 0.2, 240, '1 cup'),
+  _f('Pomegranate Juice', 'Drinks', 'Middle East', 54, 0.2, 13, 0.3, 240, '1 cup'),
+  _f('Chocolate Milkshake', 'Drinks', 'Global', 130, 3, 20, 4, 350, '1 glass'),
+  _f('Vanilla Milkshake', 'Drinks', 'Global', 128, 3, 19, 4.3, 350, '1 glass'),
+  _f('Strawberry Milkshake', 'Drinks', 'Global', 110, 2.8, 18, 3, 350, '1 glass'),
+  _f('Mango Smoothie', 'Drinks', 'South Asia', 90, 1.5, 20, 0.5, 300, '1 glass'),
+  _f('Mixed Berry Smoothie', 'Drinks', 'Global', 70, 1.2, 15, 0.5, 300, '1 glass'),
+
+  // ---------------- SNACKS / BAKED GOODS ----------------
+  _f('Chocolate Wafer Bar', 'Snacks', 'Global', 510, 6, 60, 27, 45, '1 bar'),
+  _f('Digestive Biscuits', 'Snacks', 'Global', 471, 7, 68, 20, 16, '1 biscuit'),
+  _f('Tea Biscuits (Rusk)', 'Snacks', 'South Asia', 407, 9, 73, 8, 15, '1 piece'),
+  _f('Granola Bar', 'Snacks', 'Global', 471, 10, 64, 20, 40, '1 bar'),
+
+  // ---------------- GENERIC INGREDIENTS (MORE) ----------------
+  _f('Oatmeal (cooked)', 'Generic Ingredients', 'Global', 71, 2.5, 12, 1.5, 234, '1 cup cooked'),
+  _f('Beef Bacon', 'Generic Ingredients', 'Global', 150, 20, 1, 8, 15, '2 slices'),
+
+  // ---------------- SANDWICHES ----------------
+  _f('Chicken Sandwich', 'Sandwiches', 'Global', 190, 14, 20, 6, 200, '1 sandwich'),
+  _f('Beef Sandwich', 'Sandwiches', 'Global', 220, 13, 20, 10, 200, '1 sandwich'),
+  _f('Egg Sandwich', 'Sandwiches', 'Global', 210, 9, 22, 9, 150, '1 sandwich'),
+  _f('Cheese Sandwich', 'Sandwiches', 'Global', 260, 10, 28, 11, 150, '1 sandwich'),
+  _f('Club Sandwich (Chicken)', 'Sandwiches', 'Global', 200, 12, 18, 8, 250, '1 sandwich'),
 ];
 
 Map<String, Object?> _f(

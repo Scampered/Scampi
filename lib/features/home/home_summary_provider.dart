@@ -84,9 +84,14 @@ final homeSummaryProvider = FutureProvider<HomeDailySummary>((ref) async {
   final today = DateTime.now();
 
   final profile = await profileRepo.getProfile();
-  final foodTotals = await foodLogRepo.totalsForDay(today);
-  final caloriesBurned = await exerciseLogRepo.totalCaloriesBurnedForDay(today);
-  final waterMl = await waterLogRepo.totalMlForDay(today);
+  final resetMinuteOfDay = profile?.calorieResetMinuteOfDay ?? 0;
+  final foodTotals = await foodLogRepo.totalsForDay(today, resetMinuteOfDay: resetMinuteOfDay);
+  final caloriesBurned = await exerciseLogRepo.totalCaloriesBurnedForDay(
+    today,
+    resetMinuteOfDay: resetMinuteOfDay,
+  );
+  final waterMl =
+      await waterLogRepo.totalMlForDay(today, resetMinuteOfDay: resetMinuteOfDay);
   final waterGoalMl = await profileRepo.getWaterGoalMl();
   final latestWeight = await weightLogRepo.mostRecent();
   final activeFast = await fastingRepo.getActiveSession();

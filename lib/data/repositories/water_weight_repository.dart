@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../../core/utils/day_boundary.dart';
 import '../db/app_database.dart';
 import '../models/water_weight_log.dart';
 
@@ -20,22 +21,21 @@ class WaterLogRepository {
     await db.delete('water_log', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<WaterLogEntry>> entriesForDay(DateTime day) async {
+  Future<List<WaterLogEntry>> entriesForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
     final db = await _db;
-    final start = DateTime(day.year, day.month, day.day);
-    final end = start.add(const Duration(days: 1));
+    final window = dayWindowFor(day, resetMinuteOfDay);
 
     final rows = await db.query(
       'water_log',
       where: 'logged_at >= ? AND logged_at < ?',
-      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      whereArgs: [window.start.toIso8601String(), window.end.toIso8601String()],
       orderBy: 'logged_at ASC',
     );
     return rows.map(WaterLogEntry.fromMap).toList();
   }
 
-  Future<int> totalMlForDay(DateTime day) async {
-    final entries = await entriesForDay(day);
+  Future<int> totalMlForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
+    final entries = await entriesForDay(day, resetMinuteOfDay: resetMinuteOfDay);
     return entries.fold<int>(0, (sum, e) => sum + e.amountMl);
   }
 }

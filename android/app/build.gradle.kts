@@ -22,7 +22,9 @@ android {
         applicationId = "com.example.scampi"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 26 (not flutter's lower default) — required by the Health
+        // Connect client library used for steps/sleep sync.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

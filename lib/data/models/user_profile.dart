@@ -160,6 +160,7 @@ class UserProfile {
     required this.goalMode,
     this.customDailyOffset = 0,
     this.unitsSystem = UnitsSystem.metric,
+    this.calorieResetMinuteOfDay = 0,
   });
 
   final int id;
@@ -187,6 +188,13 @@ class UserProfile {
   final int customDailyOffset;
   final UnitsSystem unitsSystem;
 
+  /// Minutes past midnight (0–1439) that "today" rolls over at for
+  /// calorie/water/exercise/sleep tracking — 0 is midnight (the
+  /// default). Full minute precision (e.g. 465 = 7:45am), not just
+  /// whole hours. Lets a user who's up past midnight (or asleep before
+  /// it) have a day boundary that actually matches their schedule.
+  final int calorieResetMinuteOfDay;
+
   int get dailyCalorieOffset =>
       goalMode == GoalMode.custom ? customDailyOffset : goalMode.defaultDailyOffset;
 
@@ -204,6 +212,7 @@ class UserProfile {
     GoalMode? goalMode,
     int? customDailyOffset,
     UnitsSystem? unitsSystem,
+    int? calorieResetMinuteOfDay,
   }) {
     return UserProfile(
       id: id,
@@ -219,6 +228,7 @@ class UserProfile {
       goalMode: goalMode ?? this.goalMode,
       customDailyOffset: customDailyOffset ?? this.customDailyOffset,
       unitsSystem: unitsSystem ?? this.unitsSystem,
+      calorieResetMinuteOfDay: calorieResetMinuteOfDay ?? this.calorieResetMinuteOfDay,
     );
   }
 
@@ -236,6 +246,7 @@ class UserProfile {
       'goal_mode': goalMode.name,
       'custom_daily_offset': customDailyOffset,
       'units_system': unitsSystem.name,
+      'calorie_reset_minute_of_day': calorieResetMinuteOfDay,
     };
   }
 
@@ -258,6 +269,8 @@ class UserProfile {
       goalMode: GoalMode.values.byName(map['goal_mode'] as String),
       customDailyOffset: map['custom_daily_offset'] as int,
       unitsSystem: UnitsSystem.values.byName(map['units_system'] as String),
+      // Older rows (before this column existed) fall back to midnight.
+      calorieResetMinuteOfDay: map['calorie_reset_minute_of_day'] as int? ?? 0,
     );
   }
 }
