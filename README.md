@@ -5,10 +5,12 @@ tracker. No accounts, no login, no cloud, no subscriptions — everything
 lives on the device. Distributed as a sideloaded APK via GitHub Releases
 (not the Play Store), with a built-in self-updater.
 
-## Status: v1.1.0 — feature-complete for daily use
+## Status: v1.1.1 — feature-complete for daily use
 
 All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
-and wired to real SQLite data. See "What's built" below for the full list.
+and wired to real SQLite data. In active daily use, driven by real
+usage feedback rather than a fixed roadmap. See "What's built" below
+for the full list.
 
 ## Getting set up
 
