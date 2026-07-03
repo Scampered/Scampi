@@ -13,8 +13,23 @@ class HealthService {
   final _health = Health();
   bool _configured = false;
 
-  static const _types = [HealthDataType.STEPS, HealthDataType.SLEEP_ASLEEP];
-  static const _permissions = [HealthDataAccess.READ, HealthDataAccess.READ];
+  // SLEEP_SESSION is the whole-night record most sources write (in
+  // particular, a manually-entered sleep in Samsung Health) — it has a
+  // start/end but no stage breakdown. SLEEP_ASLEEP is a finer-grained
+  // stage record some sources (e.g. a tracked, not manually-entered,
+  // night) also write alongside it. Requesting both and preferring
+  // whichever is actually present avoids silently getting zero results
+  // just because a source didn't happen to write stage-level data.
+  static const _types = [
+    HealthDataType.STEPS,
+    HealthDataType.SLEEP_SESSION,
+    HealthDataType.SLEEP_ASLEEP,
+  ];
+  static const _permissions = [
+    HealthDataAccess.READ,
+    HealthDataAccess.READ,
+    HealthDataAccess.READ,
+  ];
 
   Future<void> _configure() async {
     if (_configured) return;
@@ -54,6 +69,12 @@ class HealthService {
   /// Total sleep duration for "last night" — sleep sessions ending
   /// between yesterday noon and today noon, which comfortably captures
   /// a normal overnight sleep regardless of exact bed/wake times.
+  ///
+  /// Prefers whole-night SLEEP_SESSION records (what a manually-entered
+  /// Samsung Health sleep, or most simple trackers, actually write) over
+  /// summing SLEEP_ASLEEP stage records — a session has no stages to sum
+  /// in the first place, so requiring stage data would silently return
+  /// nothing for the most common case.
   Future<Duration?> lastNightSleep() async {
     await _configure();
     final now = DateTime.now();
@@ -61,15 +82,27 @@ class HealthService {
     final windowStart = todayNoon.subtract(const Duration(days: 1));
     final windowEnd = now.isAfter(todayNoon) ? todayNoon : now;
 
-    final data = await _health.getHealthDataFromTypes(
+    final sessions = await _health.getHealthDataFromTypes(
+      types: [HealthDataType.SLEEP_SESSION],
+      startTime: windowStart,
+      endTime: windowEnd,
+    );
+    if (sessions.isNotEmpty) {
+      return _sumDurations(sessions);
+    }
+
+    final stages = await _health.getHealthDataFromTypes(
       types: [HealthDataType.SLEEP_ASLEEP],
       startTime: windowStart,
       endTime: windowEnd,
     );
-    if (data.isEmpty) return null;
+    if (stages.isEmpty) return null;
+    return _sumDurations(stages);
+  }
 
+  Duration? _sumDurations(List<HealthDataPoint> points) {
     var total = Duration.zero;
-    for (final point in data) {
+    for (final point in points) {
       total += point.dateTo.difference(point.dateFrom);
     }
     return total > Duration.zero ? total : null;

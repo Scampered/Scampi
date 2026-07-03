@@ -1,13 +1,8 @@
 {
-  "latest_version": "1.1.0",
-  "version_code": 2,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.1.0/scampi-v1.1.0.apk",
+  "latest_version": "1.1.1",
+  "version_code": 3,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.1.1/scampi-v1.1.1.apk",
   "release_notes": [
-    "Fasting: Ramadan prayer-time auto-fill, 'Now' buttons, Day X/Y display for multi-day fasts, fast-complete notifications",
-    "Sleep: edit existing entries, sleep arc auto-hides when unused, Progress sleep chart with hour axis",
-    "New: Health Connect sync (steps + sleep from Google Fit/Samsung Health/wearables)",
-    "New: custom daily reset time (calorie/water/exercise/sleep tracking rolls over whenever you choose, not just midnight)",
-    "Food: AI import now supports typed descriptions (not just photos), ~30 new foods, no pork/alcohol",
-    "Various UI fixes: calorie ring layout, health warning persistence, greeting time-of-day bug"
+    "Fix: Health Connect sleep sync now finds manually-entered sleep sessions (e.g. from Samsung Health) instead of only stage-level tracked sleep data"
   ]
 }
