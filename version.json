@@ -1,8 +1,10 @@
 {
-  "latest_version": "1.1.1",
-  "version_code": 3,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.1.1/scampi-v1.1.1.apk",
+  "latest_version": "1.2.0",
+  "version_code": 4,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.2.0/scampi-v1.2.0.apk",
   "release_notes": [
-    "Fix: Health Connect sleep sync now finds manually-entered sleep sessions (e.g. from Samsung Health) instead of only stage-level tracked sleep data"
+    "New: Live Workout Session — pick an exercise and intensity, start it, and it keeps running (with a Pause/Stop notification) even if you close the app or switch to something else. Switching intensity mid-session blends into the final calorie total correctly.",
+    "Fix: Health Connect steps/sleep sync was silently failing to run even when permission was granted, due to an unreliable permission check — sync now runs reliably, shows a \"Last synced\"/error status in Profile, and also re-syncs when you come back to the app, not just on launch.",
+    "Fix: today's Fitness totals now respect your custom Daily Reset Time instead of always resetting at midnight."
   ]
 }

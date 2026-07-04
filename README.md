@@ -5,7 +5,7 @@ tracker. No accounts, no login, no cloud, no subscriptions — everything
 lives on the device. Distributed as a sideloaded APK via GitHub Releases
 (not the Play Store), with a built-in self-updater.
 
-## Status: v1.1.1 — feature-complete for daily use
+## Status: v1.2.0 — feature-complete for daily use
 
 All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
 and wired to real SQLite data. In active daily use, driven by real
@@ -42,7 +42,13 @@ back — decomposes composite dishes into separate ingredients).
 **Fitness** — exercise logging with MET-based calorie estimates,
 pace-adjusted for distance-trackable categories (walking/running/
 cycling/swimming/hiking) so a faster session burns more than a slower
-one of the same duration.
+one of the same duration. Also **Live Workout Session** — pick one
+exercise + starting intensity and start it live: it runs as a real
+Android foreground service with a persistent, button-actionable
+notification (Pause/Resume, Stop), so it keeps going even if the app is
+backgrounded or closed entirely. Intensity can be changed mid-session;
+calories are computed from the actual time spent at each intensity, not
+just whichever was picked last.
 
 **Home dashboard** — calorie ring with an inner water arc and an outer
 semicircle sleep arc (only shown once sleep tracking is actually in
@@ -73,7 +79,10 @@ reads steps and sleep sessions from Android Health Connect, which
 Google Fit, Samsung Health, and most wearable apps already write into.
 Steps become an auto-logged "Walking" exercise entry (replaced on
 re-sync, never duplicated); sleep only fills in if you haven't already
-logged it that day — a sync never overwrites a manual entry.
+logged it that day — a sync never overwrites a manual entry. Runs on
+cold start and again whenever you return to the app (debounced to
+~10 min), and shows a "Last synced"/error status plus a manual "Sync
+Now" button, so a failed sync is visible instead of silent.
 
 **Custom daily reset time** (Profile → Daily Reset Time) — pick when
 "today" rolls over for calorie/water/exercise/sleep tracking instead of
@@ -207,8 +216,10 @@ on next launch (or via Profile → Check for Updates).
 - Prayer-time calculation is accurate to roughly a minute or two of
   published times (standard solar-position formulas) — always
   presented as an editable starting point, never locked in.
-- Health Connect sync runs once per app open, not continuously in the
-  background — no foreground service or WorkManager integration.
+- Health Connect sync runs on app open/resume, not continuously in the
+  background — no WorkManager integration (the Live Workout Session's
+  foreground service is separate and only runs while a session is
+  active).
 - Native home-screen widgets are not built (deferred; would need a
   `home_widget`-based native Android `RemoteViews` layer, since there's
   no way to share Dart logic directly with a widget).

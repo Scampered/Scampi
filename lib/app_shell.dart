@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
 import 'core/health/health_sync_controller.dart';
-import 'core/health/health_sync_service.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/update/update_provider.dart';
 import 'core/update/update_screen.dart';
@@ -28,8 +27,14 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
   AppTab _currentTab = AppTab.home;
+
+  /// Skips a resume-triggered sync if the last attempt (of any kind) was
+  /// more recent than this — Health Connect data doesn't change fast
+  /// enough to need re-checking on every single tab-away-and-back.
+  static const _resumeSyncMinGap = Duration(minutes: 10);
+  DateTime? _lastHealthSyncAttempt;
 
   static const _screens = [
     HomeScreen(),
@@ -42,6 +47,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Sets up the notification channel(s) so they exist before anything
     // tries to schedule through them (e.g. starting a fast). Doesn't
     // request the runtime permission here — that's asked for lazily, at
@@ -55,21 +61,41 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _silentHealthSync());
   }
 
-  /// Best-effort, silent Health Connect sync on app open — only runs if
-  /// the user opted in via Profile settings, and never surfaces an error
-  /// (no Health Connect installed, no permission, etc. just means
-  /// nothing gets synced this time).
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final last = _lastHealthSyncAttempt;
+      if (last == null || DateTime.now().difference(last) >= _resumeSyncMinGap) {
+        _silentHealthSync();
+      }
+    }
+  }
+
+  /// Best-effort, silent Health Connect sync — runs on cold start and on
+  /// every resume (debounced, see [_resumeSyncMinGap]) so data pulled in
+  /// later in the day (or after granting permission in Health Connect
+  /// itself) shows up without needing a full app relaunch. Only runs if
+  /// the user opted in via Profile settings. Failures are recorded via
+  /// [performHealthSync] (visible in Profile) but never surfaced here —
+  /// a background sync should never interrupt using the app.
   Future<void> _silentHealthSync() async {
+    _lastHealthSyncAttempt = DateTime.now();
     try {
       final enabled = ref.read(healthSyncEnabledProvider);
       if (!enabled) return;
       final profile = await ref.read(userProfileRepositoryProvider).getProfile();
       if (profile == null) return;
-      await HealthSyncService.instance.syncToday(bodyWeightKg: profile.weightKg);
+      await performHealthSync(ref, bodyWeightKg: profile.weightKg);
       if (mounted) ref.read(dataRefreshSignalProvider.notifier).bump();
     } catch (_) {
-      // Silent — health sync is a nice-to-have, never worth interrupting
-      // app startup over.
+      // Already recorded by performHealthSync — just don't let it
+      // propagate into an interrupting error here.
     }
   }
 

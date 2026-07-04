@@ -7,7 +7,6 @@ import '../../core/update/update_screen.dart';
 import '../../core/utils/calorie_calculator.dart';
 import '../../core/health/health_service.dart';
 import '../../core/health/health_sync_controller.dart';
-import '../../core/health/health_sync_service.dart';
 import '../../data/db/app_database.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../../data/repositories/data_refresh_signal.dart';
@@ -247,11 +246,7 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
         return;
       }
       await ref.read(healthSyncEnabledProvider.notifier).setEnabled(true);
-      final profile = await ref.read(userProfileRepositoryProvider).getProfile();
-      if (profile != null) {
-        await HealthSyncService.instance.syncToday(bodyWeightKg: profile.weightKg);
-        ref.read(dataRefreshSignalProvider.notifier).bump();
-      }
+      await _syncNow();
     } catch (e) {
       setState(() => _error = "Couldn't connect to Health Connect. Is it installed?");
     } finally {
@@ -259,10 +254,37 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
     }
   }
 
+  Future<void> _syncNow() async {
+    setState(() {
+      _connecting = true;
+      _error = null;
+    });
+    try {
+      final profile = await ref.read(userProfileRepositoryProvider).getProfile();
+      if (profile == null) return;
+      await performHealthSync(ref, bodyWeightKg: profile.weightKg);
+      ref.read(dataRefreshSignalProvider.notifier).bump();
+    } catch (e) {
+      // performHealthSync already recorded this in healthSyncStatusProvider
+      // (shown below), so no need to duplicate it into _error here.
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  String _relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final enabled = ref.watch(healthSyncEnabledProvider);
+    final status = ref.watch(healthSyncStatusProvider);
     return _SectionCard(
       title: 'Health App Connector',
       child: Column(
@@ -272,7 +294,9 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
             'Sync steps and sleep from Google Fit, Samsung Health, or any '
             'other app that writes to Android Health Connect. Steps show up '
             'as an auto-logged Walking entry; sleep fills in automatically '
-            "if you haven't already logged it that day.",
+            "if you haven't already logged it that day. If another app shows "
+            "a different sleep number, that's its own separate estimate — "
+            "this reads exactly what's stored in Health Connect, nothing else.",
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -291,6 +315,30 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
                 Switch(value: enabled, onChanged: _toggle),
             ],
           ),
+          if (enabled && !_connecting) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    status.lastSyncedAt != null
+                        ? 'Last synced ${_relativeTime(status.lastSyncedAt!)}'
+                        : 'Not synced yet',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _syncNow,
+                  child: const Text('Sync Now'),
+                ),
+              ],
+            ),
+            if (status.lastError != null)
+              Text(
+                'Last sync failed: ${status.lastError}',
+                style: TextStyle(color: theme.colorScheme.error, fontSize: 12),
+              ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 4),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),

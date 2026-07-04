@@ -26,12 +26,16 @@ class HealthSyncService {
   HealthSyncService._();
   static final HealthSyncService instance = HealthSyncService._();
 
+  /// Does NOT gate on [HealthService.hasPermissions] — that call is
+  /// documented as unreliable on Android Health Connect (it frequently
+  /// returns null/false even when permission was actually granted), which
+  /// previously made this method silently no-op every single sync. The
+  /// real gate is the user's opt-in toggle (checked by callers before
+  /// invoking this); here we just attempt the reads and let Health
+  /// Connect itself return nothing if access truly isn't there.
   Future<void> syncToday({
     required double bodyWeightKg,
   }) async {
-    final hasPermissions = await HealthService.instance.hasPermissions();
-    if (!hasPermissions) return;
-
     await _syncSteps(bodyWeightKg: bodyWeightKg);
     await _syncSleep();
   }
