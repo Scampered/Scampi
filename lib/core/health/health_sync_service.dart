@@ -10,6 +10,12 @@ import 'health_service.dart';
 /// new one every time the app opens.
 const String healthSyncStepsNote = 'Auto-synced from Health Connect';
 
+/// Same idea as [healthSyncStepsNote], for sleep_log — lets a re-sync
+/// tell a stale auto-synced sleep entry apart from a manually-entered
+/// one, so it can safely refresh the former without ever touching the
+/// latter.
+const String healthSyncSleepNote = 'Auto-synced from Health Connect';
+
 /// Average walking stride length, used to turn a step count into a
 /// rough distance — a reasonable population average, not personalized.
 const double _strideKm = 0.0008;
@@ -77,11 +83,22 @@ class HealthSyncService {
     );
   }
 
+  /// Refreshes today's auto-synced sleep entry on every call — unlike
+  /// the old behavior of skipping entirely once *any* entry existed for
+  /// today, this only skips when the existing entry is a **manual** one
+  /// (`note != healthSyncSleepNote`), which is the only case that should
+  /// never be overwritten. `sleep_log.date` is UNIQUE and `logEntry` uses
+  /// `ConflictAlgorithm.replace`, so re-syncing a day that already has an
+  /// auto-synced entry naturally upserts in place rather than needing an
+  /// explicit delete first (unlike `_syncSteps`, which can have multiple
+  /// rows per day).
   Future<void> _syncSleep() async {
     final today = DateTime.now();
     final repo = SleepLogRepository();
     final existing = await repo.entryForDay(today);
-    if (existing != null) return; // never overwrite an existing entry
+    if (existing != null && existing.note != healthSyncSleepNote) {
+      return; // a manual entry always wins — never overwritten
+    }
 
     final sleep = await HealthService.instance.lastNightSleep();
     if (sleep == null) return;
@@ -90,6 +107,7 @@ class HealthSyncService {
       SleepLogEntry(
         date: today,
         hours: sleep.inMinutes / 60.0,
+        note: healthSyncSleepNote,
       ),
     );
   }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/calorie_calculator.dart';
+import '../../data/models/food_log_entry.dart';
 import '../../data/models/water_weight_log.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
@@ -9,7 +11,9 @@ import '../fasting/active_fast_sheet.dart';
 import '../fasting/start_fast_sheet.dart';
 import '../fitness/fitness_screen.dart';
 import '../food/ai_import/ai_meal_import_screen.dart';
+import '../food/food_log_provider.dart';
 import '../food/food_screen.dart';
+import '../food/widgets/edit_food_log_entry_sheet.dart';
 import 'dismissed_warning_controller.dart';
 import 'home_summary_provider.dart';
 import 'widgets/calorie_ring.dart';
@@ -20,15 +24,44 @@ import 'widgets/home_skeleton.dart';
 import 'widgets/sleep_log_sheet.dart';
 import 'widgets/water_log_sheet.dart';
 
+/// How far back Home's day-navigator lets you go — a week of history to
+/// view/edit, not an open-ended calendar.
+const int _homeHistoryDays = 6;
+
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
 /// Home tab — the daily dashboard. Backed by [homeSummaryProvider],
-/// which aggregates the profile, today's food log, exercise log, water
-/// log, and any active fast from SQLite.
-class HomeScreen extends ConsumerWidget {
+/// which aggregates the profile, food log, exercise log, water log, and
+/// any active fast from SQLite for whichever day is currently selected
+/// (defaults to today; the day-navigator allows going back up to
+/// [_homeHistoryDays] days).
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final summaryAsync = ref.watch(homeSummaryProvider);
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late DateTime _selectedDay = _dateOnly(DateTime.now());
+
+  bool get _canGoNext => _selectedDay.isBefore(_dateOnly(DateTime.now()));
+  bool get _canGoPrevious =>
+      _selectedDay.isAfter(_dateOnly(DateTime.now()).subtract(const Duration(days: _homeHistoryDays)));
+
+  void _goPreviousDay() {
+    if (!_canGoPrevious) return;
+    setState(() => _selectedDay = _selectedDay.subtract(const Duration(days: 1)));
+  }
+
+  void _goNextDay() {
+    if (!_canGoNext) return;
+    setState(() => _selectedDay = _selectedDay.add(const Duration(days: 1)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final summaryAsync = ref.watch(homeSummaryProvider(_selectedDay));
 
     return Scaffold(
       appBar: AppBar(
@@ -64,8 +97,74 @@ class HomeScreen extends ConsumerWidget {
           skipLoadingOnReload: true,
           loading: () => const HomeSkeleton(),
           error: (err, stack) => _ErrorState(message: '$err'),
-          data: (summary) => _HomeContent(summary: summary),
+          data: (summary) => Column(
+            children: [
+              _DayNavigator(
+                selectedDay: _selectedDay,
+                canGoPrevious: _canGoPrevious,
+                canGoNext: _canGoNext,
+                onPrevious: _goPreviousDay,
+                onNext: _goNextDay,
+              ),
+              Expanded(child: _HomeContent(summary: summary, selectedDay: _selectedDay)),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Prev/next-day controls, clamped to the last [_homeHistoryDays] days —
+/// lets past days' totals be viewed and edited, not just today's.
+class _DayNavigator extends StatelessWidget {
+  const _DayNavigator({
+    required this.selectedDay,
+    required this.canGoPrevious,
+    required this.canGoNext,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final DateTime selectedDay;
+  final bool canGoPrevious;
+  final bool canGoNext;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  String get _label {
+    final today = _dateOnly(DateTime.now());
+    final diff = today.difference(selectedDay).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    return DateFormat('EEE, MMM d').format(selectedDay);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            onPressed: canGoPrevious ? onPrevious : null,
+          ),
+          SizedBox(
+            width: 130,
+            child: Text(
+              _label,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            onPressed: canGoNext ? onNext : null,
+          ),
+        ],
       ),
     );
   }
@@ -102,9 +201,12 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _HomeContent extends ConsumerWidget {
-  const _HomeContent({required this.summary});
+  const _HomeContent({required this.summary, required this.selectedDay});
 
   final HomeDailySummary summary;
+  final DateTime selectedDay;
+
+  bool get _isToday => selectedDay.isAtSameMomentAs(_dateOnly(DateTime.now()));
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -184,6 +286,10 @@ class _HomeContent extends ConsumerWidget {
             ),
           ),
         ),
+        if (!_isToday) ...[
+          const SizedBox(height: 16),
+          _PastDayFoodList(day: selectedDay),
+        ],
         const SizedBox(height: 16),
         // Two IntrinsicHeight rows instead of a GridView — each row's
         // tiles size to their own content (via the Cards' mainAxisSize.min
@@ -195,7 +301,7 @@ class _HomeContent extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: _WaterTile(summary: summary)),
+              Expanded(child: _WaterTile(summary: summary, day: selectedDay)),
               const SizedBox(width: 12),
               Expanded(
                 child: SummaryTile(
@@ -208,7 +314,7 @@ class _HomeContent extends ConsumerWidget {
                   subtitle: summary.goalWeightKg != null
                       ? 'goal ${summary.goalWeightKg!.toStringAsFixed(1)} kg'
                       : 'no goal set',
-                  onTap: () => _updateWeight(context, ref, summary.currentWeightKg),
+                  onTap: () => _updateWeight(context, ref, summary.currentWeightKg, selectedDay),
                   actionLabel: 'Update Weight',
                 ),
               ),
@@ -224,7 +330,7 @@ class _HomeContent extends ConsumerWidget {
                 child: SummaryTile(
                   icon: Icons.timer_outlined,
                   iconColor: theme.colorScheme.tertiary,
-                  label: "Today's Fast",
+                  label: _isToday ? "Today's Fast" : 'Fasting',
                   value: summary.activeFast == null
                       ? 'Not fasting'
                       : summary.activeFast!.isMultiDay
@@ -245,7 +351,7 @@ class _HomeContent extends ConsumerWidget {
                   iconColor: ScampiColors.macroProtein,
                   label: 'Burned',
                   value: '${summary.caloriesBurned.round()} kcal',
-                  subtitle: 'from exercise today',
+                  subtitle: _isToday ? 'from exercise today' : 'from exercise that day',
                 ),
               ),
             ],
@@ -260,14 +366,18 @@ class _HomeContent extends ConsumerWidget {
               icon: Icons.restaurant_rounded,
               label: 'Add Food',
               color: ScampiColors.mint,
-              onTap: () => FoodScreen.openSearch(context),
+              onTap: () => _isToday
+                  ? FoodScreen.openSearch(context)
+                  : _showTodayOnlyMessage(context),
             ),
             const SizedBox(width: 10),
             QuickActionButton(
               icon: Icons.directions_run_rounded,
               label: 'Add Exercise',
               color: ScampiColors.blue,
-              onTap: () => FitnessScreen.openLogSheet(context),
+              onTap: () => _isToday
+                  ? FitnessScreen.openLogSheet(context)
+                  : _showTodayOnlyMessage(context),
             ),
           ],
         ),
@@ -281,7 +391,7 @@ class _HomeContent extends ConsumerWidget {
               onTap: () => showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,
-                builder: (_) => const WaterLogSheet(),
+                builder: (_) => WaterLogSheet(day: selectedDay),
               ),
             ),
             const SizedBox(width: 10),
@@ -289,9 +399,11 @@ class _HomeContent extends ConsumerWidget {
               icon: Icons.smart_toy_rounded,
               label: 'AI Meal Import',
               color: ScampiColors.orange,
-              onTap: () => Navigator.of(context).push<bool>(
-                MaterialPageRoute(builder: (_) => const AiMealImportScreen()),
-              ),
+              onTap: () => _isToday
+                  ? Navigator.of(context).push<bool>(
+                      MaterialPageRoute(builder: (_) => const AiMealImportScreen()),
+                    )
+                  : _showTodayOnlyMessage(context),
             ),
           ],
         ),
@@ -323,11 +435,16 @@ class _HomeContent extends ConsumerWidget {
     );
   }
 
-  Future<void> _updateWeight(BuildContext context, WidgetRef ref, double? currentWeightKg) async {
+  Future<void> _updateWeight(
+    BuildContext context,
+    WidgetRef ref,
+    double? currentWeightKg,
+    DateTime day,
+  ) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _UpdateWeightSheet(currentWeightKg: currentWeightKg),
+      builder: (_) => _UpdateWeightSheet(currentWeightKg: currentWeightKg, day: day),
     );
   }
 
@@ -335,18 +452,31 @@ class _HomeContent extends ConsumerWidget {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => SleepLogSheet(existing: summary.todaySleepEntry),
+      builder: (_) => SleepLogSheet(existing: summary.todaySleepEntry, day: selectedDay),
     );
   }
 
   Future<void> _openFastSheet(BuildContext context, HomeDailySummary summary) async {
     final activeFast = summary.activeFast;
+    if (activeFast == null && !_isToday) {
+      _showTodayOnlyMessage(context);
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => activeFast != null
           ? ActiveFastSheet(session: activeFast)
           : const StartFastSheet(),
+    );
+  }
+
+  void _showTodayOnlyMessage(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Switch to Today to add new entries — past days here are for review and '
+            'editing water, weight, and sleep.'),
+      ),
     );
   }
 
@@ -456,6 +586,117 @@ class _HealthWarningCard extends StatelessWidget {
   }
 }
 
+/// Shown on Home only when viewing a past day (the Food tab itself only
+/// ever shows today) — lets that day's logged food actually be reviewed
+/// and edited, not just its total. Tap an entry to edit it in place
+/// ([EditFoodLogEntrySheet], same as the Food tab); swipe to delete.
+class _PastDayFoodList extends ConsumerStatefulWidget {
+  const _PastDayFoodList({required this.day});
+
+  final DateTime day;
+
+  @override
+  ConsumerState<_PastDayFoodList> createState() => _PastDayFoodListState();
+}
+
+class _PastDayFoodListState extends ConsumerState<_PastDayFoodList> {
+  final Set<int> _removedIds = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final entriesAsync = ref.watch(dayFoodLogProvider(widget.day));
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Food Logged', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            entriesAsync.when(
+              skipLoadingOnReload: true,
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (err, _) => Text('$err', style: theme.textTheme.bodySmall),
+              data: (entries) {
+                final visible = entries.where((e) => !_removedIds.contains(e.id)).toList();
+                if (visible.isEmpty) {
+                  return Text('Nothing logged that day.', style: theme.textTheme.bodySmall);
+                }
+                return Column(
+                  children: [
+                    for (final entry in visible)
+                      Dismissible(
+                        key: ValueKey(entry.id ?? entry.hashCode),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.error.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: const Icon(Icons.delete_rounded, color: Colors.white),
+                        ),
+                        onDismissed: (_) => _delete(entry),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => EditFoodLogEntrySheet(entry: entry),
+                          ),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${entry.foodName} · ${entry.mealSlot.label}',
+                                    style: theme.textTheme.bodyMedium,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  '${entry.calories.round()} kcal',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: ScampiColors.macroProtein,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _delete(FoodLogEntry entry) async {
+    if (entry.id == null) return;
+    setState(() => _removedIds.add(entry.id!));
+    await ref.read(foodLogRepositoryProvider).deleteEntry(entry.id!);
+    ref.read(dataRefreshSignalProvider.notifier).bump();
+  }
+}
+
 class _DailyTipCard extends StatelessWidget {
   const _DailyTipCard({required this.tip});
 
@@ -506,9 +747,10 @@ const int _maxDroplets = 10;
 /// opens [WaterLogSheet] for a custom amount or to remove a mistaken
 /// entry.
 class _WaterTile extends ConsumerWidget {
-  const _WaterTile({required this.summary});
+  const _WaterTile({required this.summary, required this.day});
 
   final HomeDailySummary summary;
+  final DateTime day;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -519,7 +761,7 @@ class _WaterTile extends ConsumerWidget {
         onTap: () => showModalBottomSheet<void>(
           context: context,
           isScrollControlled: true,
-          builder: (_) => const WaterLogSheet(),
+          builder: (_) => WaterLogSheet(day: day),
         ),
         borderRadius: BorderRadius.circular(24),
         child: Padding(
@@ -577,8 +819,13 @@ class _WaterTile extends ConsumerWidget {
   }
 
   Future<void> _quickAdd(WidgetRef ref, int amountMl) async {
+    final now = DateTime.now();
+    // Same "keep the time-of-day, move the date" approach as
+    // WaterLogSheet's custom-amount entry, for a quick-add made while
+    // viewing a past day.
+    final loggedAt = DateTime(day.year, day.month, day.day, now.hour, now.minute);
     await ref.read(waterLogRepositoryProvider).logEntry(
-          WaterLogEntry(loggedAt: DateTime.now(), amountMl: amountMl),
+          WaterLogEntry(loggedAt: loggedAt, amountMl: amountMl),
         );
     ref.read(dataRefreshSignalProvider.notifier).bump();
   }
@@ -702,9 +949,13 @@ class _WaterChip extends StatelessWidget {
 /// Bottom sheet for logging a new weigh-in from the Home "Weight Goal"
 /// tile, rather than only being able to see weight via Progress.
 class _UpdateWeightSheet extends ConsumerStatefulWidget {
-  const _UpdateWeightSheet({required this.currentWeightKg});
+  const _UpdateWeightSheet({required this.currentWeightKg, required this.day});
 
   final double? currentWeightKg;
+
+  /// Which day this check-in is for — the currently-selected day on
+  /// Home's day-navigator.
+  final DateTime day;
 
   @override
   ConsumerState<_UpdateWeightSheet> createState() => _UpdateWeightSheetState();
@@ -733,9 +984,26 @@ class _UpdateWeightSheetState extends ConsumerState<_UpdateWeightSheet> {
     if (weightKg == null || weightKg <= 0 || _saving) return;
     setState(() => _saving = true);
 
+    final now = DateTime.now();
+    final isToday = widget.day.year == now.year &&
+        widget.day.month == now.month &&
+        widget.day.day == now.day;
+    // Same "keep the time-of-day, move the date" approach as the water
+    // sheet, for a check-in logged while viewing a past day.
+    final loggedAt =
+        isToday ? now : DateTime(widget.day.year, widget.day.month, widget.day.day, now.hour, now.minute);
+
     await ref.read(weightLogRepositoryProvider).logEntry(
-          WeightLogEntry(loggedAt: DateTime.now(), weightKg: weightKg),
+          WeightLogEntry(loggedAt: loggedAt, weightKg: weightKg),
         );
+    // Keeps Profile's displayed weight (and the BMR/calorie-goal
+    // calculation, which reads straight off the profile) in sync with
+    // the latest check-in — but only when this check-in actually *is*
+    // the latest (i.e. logged for today). A backdated correction for a
+    // past day shouldn't override what "current weight" means now.
+    if (isToday) {
+      await ref.read(userProfileRepositoryProvider).setWeightKg(weightKg);
+    }
     ref.read(dataRefreshSignalProvider.notifier).bump();
 
     if (mounted) Navigator.of(context).pop();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/health/health_sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/exercise_log_entry.dart';
@@ -301,6 +302,7 @@ class _ExerciseLogTile extends StatelessWidget {
       '${entry.durationMinutes} min',
       entry.intensity.label,
       if (entry.distanceKm != null) '${entry.distanceKm!.toStringAsFixed(1)} km',
+      if (entry.note == healthSyncStepsNote) 'Auto',
     ].join(' · ');
 
     return Dismissible(

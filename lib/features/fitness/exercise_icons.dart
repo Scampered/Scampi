@@ -27,10 +27,21 @@ IconData iconForExerciseCategory(ExerciseCategory category) {
       return Icons.sports_martial_arts_rounded;
     case ExerciseCategory.hiking:
       return Icons.terrain_rounded;
+    case ExerciseCategory.stairs:
+      return Icons.stairs_rounded;
+    case ExerciseCategory.cricket:
+      return Icons.sports_cricket_rounded;
     case ExerciseCategory.other:
       return Icons.sports_rounded;
   }
 }
+
+/// Categories offered when logging a new session — excludes
+/// [ExerciseCategory.gym], which is kept in the enum only so old logged
+/// entries still parse/display, but overlapped confusingly with
+/// [ExerciseCategory.weightTraining] as a choice for new ones.
+final List<ExerciseCategory> selectableExerciseCategories =
+    ExerciseCategory.values.where((c) => c != ExerciseCategory.gym).toList();
 
 /// Categories where logging a distance makes sense.
 const Set<ExerciseCategory> distanceTrackedCategories = {

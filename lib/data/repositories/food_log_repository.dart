@@ -23,6 +23,14 @@ class FoodLogRepository {
     await db.delete('food_log', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Updates an already-logged entry in place — used to fix a mistake
+  /// (wrong quantity, wrong meal slot) without deleting and re-logging.
+  /// [entry.id] must be set.
+  Future<void> updateEntry(FoodLogEntry entry) async {
+    final db = await _db;
+    await db.update('food_log', entry.toMap(), where: 'id = ?', whereArgs: [entry.id]);
+  }
+
   /// All entries logged on the given calendar day (local time), ordered
   /// by when they were logged. [resetMinuteOfDay] shifts what counts as "today"
   /// — see [dayWindowFor] — defaulting to plain midnight.

@@ -5,7 +5,7 @@ tracker. No accounts, no login, no cloud, no subscriptions — everything
 lives on the device. Distributed as a sideloaded APK via GitHub Releases
 (not the Play Store), with a built-in self-updater.
 
-## Status: v1.2.0 — feature-complete for daily use
+## Status: v1.3.0 — feature-complete for daily use
 
 All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
 and wired to real SQLite data. In active daily use, driven by real
@@ -37,9 +37,17 @@ Bahrain, Germany, Algeria, Middle East, South Asia, Europe, Global —
 no pork or alcohol); custom food creator + edit/delete for "Your
 Ingredients"; meal builder; AI import (photo *or* typed description,
 share-sheet workflow to ChatGPT/Claude/Gemini, paste the JSON reply
-back — decomposes composite dishes into separate ingredients).
+back — decomposes composite dishes into separate ingredients). Two
+checkboxes on the review screen, both off by default, control whether
+an AI import is saved as a reusable meal and/or its ingredients saved to
+"Your Ingredients" — a one-off result can be logged without cluttering
+either list. Tap any already-logged food item to edit it in place
+(quantity, meal slot, or macros directly if it has no linked food row)
+instead of deleting and re-logging.
 
-**Fitness** — exercise logging with MET-based calorie estimates,
+**Fitness** — exercise logging (walking, running, cycling, swimming,
+football, basketball, tennis, weight training, martial arts, hiking,
+stair climbing, cricket, other) with MET-based calorie estimates,
 pace-adjusted for distance-trackable categories (walking/running/
 cycling/swimming/hiking) so a faster session burns more than a slower
 one of the same duration. Also **Live Workout Session** — pick one
@@ -53,7 +61,13 @@ just whichever was picked last.
 **Home dashboard** — calorie ring with an inner water arc and an outer
 semicircle sleep arc (only shown once sleep tracking is actually in
 use — see below); water droplet tile with quick-add chips and a full
-log/edit/delete sheet; weight check-in; fasting tile; daily tip.
+log/edit/delete sheet; weight check-in (keeps the profile's stored
+weight in sync, so Profile/BMR/calorie-goal never lag behind a new
+check-in); fasting tile; daily tip. A day-navigator (prev/next chevrons,
+up to 7 days back) lets past days be reviewed and edited too — water,
+weight, sleep, and a mini logged-food list with the same tap-to-edit as
+the Food tab; quick actions that only make sense for "right now" (Add
+Food/Exercise, AI Import, Start Fast) are disabled on past days.
 
 **Sleep** — manual bedtime/wake-time entry (editable, not just
 add-only); optional Health Connect auto-sync (see below). The sleep
@@ -71,15 +85,18 @@ Suhoor/Iftar times from an **on-device** astronomical calculation
 lat/lng/date, no network call) using the device's location.
 
 **Progress** — weekly calorie bar chart, weight trend line (1M/6M
-toggle, real date/weight axes), sleep bar chart (recommended-8h
-reference line, hour axis).
+toggle, real date/weight axes — falls back to showing all available
+check-ins if fewer than 2 fall within the selected window, rather than
+hiding the trend entirely), sleep bar chart (recommended-8h reference
+line, hour axis). Tooltips show clean rounded values, not raw floats.
 
 **Health Connect sync** (opt-in, Profile → Health App Connector) —
 reads steps and sleep sessions from Android Health Connect, which
 Google Fit, Samsung Health, and most wearable apps already write into.
 Steps become an auto-logged "Walking" exercise entry (replaced on
-re-sync, never duplicated); sleep only fills in if you haven't already
-logged it that day — a sync never overwrites a manual entry. Runs on
+re-sync, never duplicated, labeled "Auto" in the log); sleep fills in
+the same way — a re-sync safely refreshes a stale *auto-synced* sleep
+entry, but a manual entry always wins and is never overwritten. Runs on
 cold start and again whenever you return to the app (debounced to
 ~10 min), and shows a "Last synced"/error status plus a manual "Sync
 Now" button, so a failed sync is visible instead of silent.
@@ -87,6 +104,10 @@ Now" button, so a failed sync is visible instead of silent.
 **Custom daily reset time** (Profile → Daily Reset Time) — pick when
 "today" rolls over for calorie/water/exercise/sleep tracking instead of
 always assuming midnight, for anyone up late or asleep before it.
+
+**Cheat day** (opt-in, Profile → Cheat Day or during onboarding) — pick
+one day of the week and a bonus calorie amount added to that day's
+goal; editable or turn-off-able anytime.
 
 **Notifications** — local-only (`flutter_local_notifications`), used
 for the fasting-complete reminder; the infrastructure

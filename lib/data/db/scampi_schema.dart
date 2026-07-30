@@ -33,7 +33,10 @@ class ScampiSchema {
       custom_daily_offset INTEGER NOT NULL DEFAULT 0,
       units_system TEXT NOT NULL DEFAULT 'metric',
       water_goal_ml INTEGER NOT NULL DEFAULT 2500,
-      calorie_reset_minute_of_day INTEGER NOT NULL DEFAULT 0
+      calorie_reset_minute_of_day INTEGER NOT NULL DEFAULT 0,
+      cheat_day_enabled INTEGER NOT NULL DEFAULT 0,
+      cheat_day_of_week INTEGER,
+      cheat_day_bonus_kcal INTEGER NOT NULL DEFAULT 300
     );
   ''';
 
@@ -177,7 +180,8 @@ class ScampiSchema {
       date TEXT NOT NULL UNIQUE,
       hours REAL NOT NULL,
       bedtime TEXT,
-      wake_time TEXT
+      wake_time TEXT,
+      note TEXT
     );
   ''';
 

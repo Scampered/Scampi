@@ -1,19 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/calorie_calculator.dart';
+import '../../core/utils/day_boundary.dart';
 import '../../data/models/fasting_session.dart';
 import '../../data/models/sleep_log_entry.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
 
-/// Everything the Home screen needs for "today", aggregated from the
+/// Everything the Home screen needs for a given day, aggregated from the
 /// profile, food log, exercise log, water log, weight log, and any
-/// active fast. Built fresh each time [homeSummaryProvider] re-runs
-/// (on app start and whenever [dataRefreshSignalProvider] is bumped).
+/// active fast. Built fresh each time [homeSummaryProvider] re-runs (on
+/// app start and whenever [dataRefreshSignalProvider] is bumped).
 class HomeDailySummary {
   const HomeDailySummary({
     required this.hasProfile,
     this.userName = '',
     this.calculation,
+    this.cheatDayBonusKcal = 0,
     required this.caloriesConsumed,
     required this.caloriesBurned,
     required this.proteinConsumedG,
@@ -32,6 +34,11 @@ class HomeDailySummary {
   final bool hasProfile;
   final String userName;
   final CalorieCalculation? calculation;
+
+  /// Bonus calories added to [calorieGoal] when the viewed day is the
+  /// user's configured cheat day — 0 otherwise. See Profile's "Cheat Day"
+  /// settings.
+  final int cheatDayBonusKcal;
 
   final double caloriesConsumed;
   final double caloriesBurned;
@@ -61,13 +68,17 @@ class HomeDailySummary {
   /// stopped, rather than permanently showing an empty "0h" stat.
   final bool sleepTrackingActive;
 
-  int get calorieGoal => (calculation?.dailyCalorieGoal ?? 2000).round();
+  int get calorieGoal => (calculation?.dailyCalorieGoal ?? 2000).round() + cheatDayBonusKcal;
   int get netCalories =>
       (caloriesConsumed - caloriesBurned).round();
   int get caloriesRemaining => calorieGoal - netCalories;
 }
 
-final homeSummaryProvider = FutureProvider<HomeDailySummary>((ref) async {
+/// Keyed by the calendar day being viewed (normalized to midnight) — see
+/// [HomeScreen]'s day-navigator, which lets the last 7 days be viewed and
+/// edited, not just today.
+final homeSummaryProvider =
+    FutureProvider.family<HomeDailySummary, DateTime>((ref, selectedDay) async {
   // Watching the refresh signal means any logged food/water/exercise/
   // weight entry (which bumps it) causes this provider to re-run and
   // the Home screen to update automatically.
@@ -81,24 +92,35 @@ final homeSummaryProvider = FutureProvider<HomeDailySummary>((ref) async {
   final sleepLogRepo = ref.read(sleepLogRepositoryProvider);
   final fastingRepo = ref.read(fastingRepositoryProvider);
 
-  final today = DateTime.now();
+  final now = DateTime.now();
+  final isToday = selectedDay.year == now.year &&
+      selectedDay.month == now.month &&
+      selectedDay.day == now.day;
 
   final profile = await profileRepo.getProfile();
   final resetMinuteOfDay = profile?.calorieResetMinuteOfDay ?? 0;
-  final foodTotals = await foodLogRepo.totalsForDay(today, resetMinuteOfDay: resetMinuteOfDay);
+  final foodTotals =
+      await foodLogRepo.totalsForDay(selectedDay, resetMinuteOfDay: resetMinuteOfDay);
   final caloriesBurned = await exerciseLogRepo.totalCaloriesBurnedForDay(
-    today,
+    selectedDay,
     resetMinuteOfDay: resetMinuteOfDay,
   );
   final waterMl =
-      await waterLogRepo.totalMlForDay(today, resetMinuteOfDay: resetMinuteOfDay);
+      await waterLogRepo.totalMlForDay(selectedDay, resetMinuteOfDay: resetMinuteOfDay);
   final waterGoalMl = await profileRepo.getWaterGoalMl();
-  final latestWeight = await weightLogRepo.mostRecent();
-  final activeFast = await fastingRepo.getActiveSession();
-  final todaySleep = await sleepLogRepo.entryForDay(today);
-  final yesterdaySleep =
-      await sleepLogRepo.entryForDay(today.subtract(const Duration(days: 1)));
-  final sleepTrackingActive = todaySleep != null || yesterdaySleep != null;
+  final latestWeight = isToday
+      ? await weightLogRepo.mostRecent()
+      : await weightLogRepo.mostRecentAsOf(selectedDay, resetMinuteOfDay: resetMinuteOfDay);
+  // A fast is live session state, not per-day history — only meaningful
+  // while looking at today.
+  final activeFast = isToday ? await fastingRepo.getActiveSession() : null;
+  final selectedDaySleep =
+      await sleepLogRepo.entryForDay(selectedDay, resetMinuteOfDay: resetMinuteOfDay);
+  final priorDaySleep = await sleepLogRepo.entryForDay(
+    selectedDay.subtract(const Duration(days: 1)),
+    resetMinuteOfDay: resetMinuteOfDay,
+  );
+  final sleepTrackingActive = selectedDaySleep != null || priorDaySleep != null;
 
   final calculation = profile != null
       ? CalorieCalculator.calculate(
@@ -110,11 +132,17 @@ final homeSummaryProvider = FutureProvider<HomeDailySummary>((ref) async {
               : profile,
         )
       : null;
+  final cheatDayBonus = profile != null &&
+          profile.cheatDayEnabled &&
+          profile.cheatDayOfWeek == dayWindowFor(selectedDay, resetMinuteOfDay).start.weekday
+      ? profile.cheatDayBonusKcal
+      : 0;
 
   return HomeDailySummary(
     hasProfile: profile != null,
     userName: profile?.name ?? '',
     calculation: calculation,
+    cheatDayBonusKcal: cheatDayBonus,
     caloriesConsumed: foodTotals.calories,
     caloriesBurned: caloriesBurned,
     proteinConsumedG: foodTotals.proteinG,
@@ -125,8 +153,8 @@ final homeSummaryProvider = FutureProvider<HomeDailySummary>((ref) async {
     currentWeightKg: latestWeight?.weightKg ?? profile?.weightKg,
     goalWeightKg: profile?.goalWeightKg,
     activeFast: activeFast,
-    sleepHours: todaySleep?.hours,
-    todaySleepEntry: todaySleep,
+    sleepHours: selectedDaySleep?.hours,
+    todaySleepEntry: selectedDaySleep,
     sleepTrackingActive: sleepTrackingActive,
   );
 });

@@ -11,3 +11,13 @@ final todayFoodLogProvider = FutureProvider<List<FoodLogEntry>>((ref) async {
   final repo = ref.read(foodLogRepositoryProvider);
   return repo.entriesForDay(DateTime.now());
 });
+
+/// Same as [todayFoodLogProvider], but for an arbitrary day — used by
+/// Home's day-navigator to show/edit a past day's logged food, since the
+/// Food tab itself only ever shows today.
+final dayFoodLogProvider =
+    FutureProvider.family<List<FoodLogEntry>, DateTime>((ref, day) async {
+  ref.watch(dataRefreshSignalProvider);
+  final repo = ref.read(foodLogRepositoryProvider);
+  return repo.entriesForDay(day);
+});

@@ -80,7 +80,7 @@ class _WorkoutSessionStartSheetState extends ConsumerState<WorkoutSessionStartSh
                 Wrap(
                   spacing: ScampiSpacing.xs,
                   runSpacing: ScampiSpacing.xs,
-                  children: ExerciseCategory.values.map((category) {
+                  children: selectableExerciseCategories.map((category) {
                     final selected = category == _category;
                     return ChoiceChip(
                       avatar: Icon(

@@ -20,9 +20,15 @@ MealSlot defaultMealSlotForNow() {
 /// Bottom sheet for entering a quantity (grams or servings) of a food and
 /// logging it to today's diary. Pops with `true` if an entry was saved.
 class QuantityEntrySheet extends ConsumerStatefulWidget {
-  const QuantityEntrySheet({super.key, required this.food});
+  const QuantityEntrySheet({super.key, required this.food, this.initialGrams});
 
   final Food food;
+
+  /// Prefills the grams field with this value instead of the 100g
+  /// fallback — used by AI import to start from the AI's (or the user's
+  /// review-screen-edited) actual estimated gram amount instead of
+  /// silently discarding it.
+  final double? initialGrams;
 
   @override
   ConsumerState<QuantityEntrySheet> createState() => _QuantityEntrySheetState();
@@ -50,8 +56,8 @@ class _QuantityEntrySheetState extends ConsumerState<QuantityEntrySheet> {
     } else {
       _mode = QuantityMode.grams;
       _servings = 1;
-      _grams = 100;
-      _amountController = TextEditingController(text: '100');
+      _grams = widget.initialGrams ?? 100;
+      _amountController = TextEditingController(text: _formatNumber(_grams));
     }
   }
 

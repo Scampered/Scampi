@@ -140,7 +140,18 @@ Future<Food> resolveOrCreateFood(FoodRepository repo, ParsedFoodDraft draft) asy
   final existing = await repo.findByExactName(draft.name);
   if (existing != null) return existing;
 
-  final food = Food(
+  final food = unsavedFoodFrom(draft);
+  final id = await repo.createCustomFood(food);
+  return food.copyWith(id: id);
+}
+
+/// Builds the same [Food] shape [resolveOrCreateFood] would, but without
+/// persisting it — used when the user has opted out of adding an
+/// AI-parsed ingredient to "Your Ingredients". `id` stays null, which
+/// [FoodLogEntry.foodId] already supports (see its doc comment: a
+/// custom one-off entry with no stored food row).
+Food unsavedFoodFrom(ParsedFoodDraft draft) {
+  return Food(
     name: draft.name,
     category: draft.category.trim().isEmpty ? 'Generic Ingredients' : draft.category.trim(),
     caloriesPer100g: draft.caloriesPer100g,
@@ -151,8 +162,6 @@ Future<Food> resolveOrCreateFood(FoodRepository repo, ParsedFoodDraft draft) asy
     defaultServingLabel: draft.defaultServingLabel,
     isCustom: true,
   );
-  final id = await repo.createCustomFood(food);
-  return food.copyWith(id: id);
 }
 
 class AiImportParseException implements Exception {

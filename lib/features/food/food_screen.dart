@@ -7,6 +7,7 @@ import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
 import 'food_log_provider.dart';
 import 'food_search_screen.dart';
+import 'widgets/edit_food_log_entry_sheet.dart';
 
 /// Food tab — today's food diary, grouped by meal slot, with a swipe-to-
 /// delete gesture on each entry and an entry point into food search.
@@ -189,31 +190,39 @@ class _FoodLogTile extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: Card(
         margin: const EdgeInsets.only(bottom: ScampiSpacing.xs),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ScampiSpacing.md,
-            vertical: ScampiSpacing.sm,
+        child: InkWell(
+          borderRadius: ScampiRadius.mdBorder,
+          onTap: () => showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => EditFoodLogEntrySheet(entry: entry),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(entry.foodName, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(quantityLabel, style: theme.textTheme.bodySmall),
-                  ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: ScampiSpacing.md,
+              vertical: ScampiSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.foodName, style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 2),
+                      Text(quantityLabel, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-              Text(
-                '${entry.calories.round()} kcal',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ScampiColors.macroProtein,
-                  fontWeight: FontWeight.w700,
+                Text(
+                  '${entry.calories.round()} kcal',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: ScampiColors.macroProtein,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

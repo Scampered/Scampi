@@ -41,8 +41,13 @@ enum _Step {
   targetDate,
   activity,
   goalMode,
+  cheatDay,
   review,
 }
+
+/// Monday-first day-of-week labels, indexed to match [DateTime.weekday]
+/// (1 = Monday .. 7 = Sunday) via `_weekdayLabels[weekday - 1]`.
+const List<String> _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _stepIndex = 0;
@@ -52,12 +57,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
   final _goalWeightController = TextEditingController();
+  final _cheatDayBonusController = TextEditingController(text: '300');
 
   BiologicalSex _sex = BiologicalSex.male;
   ActivityLevel _activityLevel = ActivityLevel.moderatelyActive;
   GoalMode _goalMode = GoalMode.maintain;
   UnitsSystem _unitsSystem = UnitsSystem.metric;
   bool _goalWeightSkipped = false;
+
+  bool _cheatDayEnabled = false;
+  int? _cheatDayOfWeek;
 
   /// Which preset duration chip (if any) was last tapped on the target-
   /// date step, so the chip row can show which one is active — comparing
@@ -83,6 +92,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _goalMode = existing.goalMode;
       _unitsSystem = existing.unitsSystem;
       _targetDate = existing.targetDate;
+      _cheatDayEnabled = existing.cheatDayEnabled;
+      _cheatDayOfWeek = existing.cheatDayOfWeek;
+      _cheatDayBonusController.text = existing.cheatDayBonusKcal.toString();
 
       _ageController.text = existing.age.toString();
       final goalKg = existing.goalWeightKg;
@@ -111,6 +123,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _heightController.dispose();
     _weightController.dispose();
     _goalWeightController.dispose();
+    _cheatDayBonusController.dispose();
     super.dispose();
   }
 
@@ -180,6 +193,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (_hasWeightGoalDirection) _Step.targetDate,
       _Step.activity,
       _Step.goalMode,
+      _Step.cheatDay,
       _Step.review,
     ];
   }
@@ -376,6 +390,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         );
       case _Step.goalMode:
         return _buildGoalModeStep(context);
+      case _Step.cheatDay:
+        return _buildCheatDayStep(context);
       case _Step.review:
         return _ReviewStep(
           isEditing: _isEditing,
@@ -390,6 +406,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           targetDate: _targetDate,
           activityLevel: _activityLevel,
           goalMode: _goalMode,
+          cheatDayLabel: _cheatDayEnabled && _cheatDayOfWeek != null
+              ? '${_weekdayLabels[_cheatDayOfWeek! - 1]} '
+                  '(+${_cheatDayBonusController.text.trim()} kcal)'
+              : null,
           onConfirm: _save,
         );
     }
@@ -611,6 +631,70 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
+  Widget _buildCheatDayStep(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectionColor = scampiSelectionColor(context);
+
+    return _StepScaffold(
+      title: 'Want a weekly cheat day?',
+      subtitle: 'Totally optional — pick one day a week where your '
+          "calorie goal gets a bonus. You can turn this on/off or change "
+          'it anytime from Profile.',
+      error: _stepError,
+      onNext: _goNext,
+      scrollable: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            value: _cheatDayEnabled,
+            onChanged: (v) => setState(() {
+              _cheatDayEnabled = v;
+              if (v && _cheatDayOfWeek == null) _cheatDayOfWeek = DateTime.saturday;
+            }),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Enable cheat day'),
+          ),
+          if (_cheatDayEnabled) ...[
+            const SizedBox(height: ScampiSpacing.sm),
+            Text('Day of the week', style: theme.textTheme.labelLarge),
+            const SizedBox(height: ScampiSpacing.xs),
+            Wrap(
+              spacing: ScampiSpacing.xs,
+              children: List.generate(7, (i) {
+                final weekday = i + 1;
+                final selected = _cheatDayOfWeek == weekday;
+                return ChoiceChip(
+                  label: Text(_weekdayLabels[i]),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _cheatDayOfWeek = weekday),
+                  selectedColor: selectionColor.withValues(alpha: 0.16),
+                  labelStyle: TextStyle(
+                    color: selected ? selectionColor : null,
+                    fontWeight: selected ? FontWeight.w700 : null,
+                  ),
+                  side: BorderSide(
+                    color: selected ? selectionColor : theme.colorScheme.outlineVariant,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: ScampiSpacing.md),
+            TextField(
+              controller: _cheatDayBonusController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Bonus calories',
+                helperText: 'Added on top of your normal goal that day',
+                border: OutlineInputBorder(borderRadius: ScampiRadius.smBorder),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String _paceDescription(int dailyOffsetKcal) {
     final rate = CalorieCalculator.weeklyRateKgForDailyOffset(dailyOffsetKcal);
     final isGain = dailyOffsetKcal > 0;
@@ -663,6 +747,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case _Step.targetDate:
       case _Step.activity:
       case _Step.goalMode:
+      case _Step.cheatDay:
       case _Step.review:
         return null;
       case _Step.age:
@@ -723,6 +808,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           0;
     }
 
+    final cheatDayBonus = int.tryParse(_cheatDayBonusController.text.trim()) ?? 300;
+
     final profile = UserProfile(
       name: _nameController.text.trim(),
       age: age,
@@ -735,6 +822,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       goalMode: _goalMode,
       customDailyOffset: customOffset,
       unitsSystem: _unitsSystem,
+      // Carries the existing profile's reset time forward when editing —
+      // this wizard has no step for it (it's Profile-only, same as the
+      // Cheat Day settings section there), so a naive `UserProfile(...)`
+      // here would otherwise silently reset it to midnight on every edit.
+      calorieResetMinuteOfDay: widget.existingProfile?.calorieResetMinuteOfDay ?? 0,
+      cheatDayEnabled: _cheatDayEnabled,
+      cheatDayOfWeek: _cheatDayEnabled ? _cheatDayOfWeek : null,
+      cheatDayBonusKcal: cheatDayBonus,
     );
 
     final repo = ref.read(userProfileRepositoryProvider);
@@ -1050,6 +1145,7 @@ class _ReviewStep extends StatelessWidget {
     required this.targetDate,
     required this.activityLevel,
     required this.goalMode,
+    this.cheatDayLabel,
     required this.onConfirm,
   });
 
@@ -1064,6 +1160,7 @@ class _ReviewStep extends StatelessWidget {
   final DateTime? targetDate;
   final ActivityLevel activityLevel;
   final GoalMode goalMode;
+  final String? cheatDayLabel;
   final VoidCallback onConfirm;
 
   @override
@@ -1115,6 +1212,7 @@ class _ReviewStep extends StatelessWidget {
                       row('Target Date', DateFormat('MMM d, yyyy').format(targetDate!)),
                     row('Activity Level', activityLevel.label),
                     row('Goal', goalMode.label),
+                    if (cheatDayLabel != null) row('Cheat Day', cheatDayLabel!),
                   ],
                 ),
               ),

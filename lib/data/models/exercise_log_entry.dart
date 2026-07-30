@@ -6,10 +6,17 @@ enum ExerciseCategory {
   football,
   basketball,
   tennis,
+  // Kept for backward compatibility with already-logged entries — no
+  // longer offered in the category pickers (see exercise_log_sheet.dart
+  // / workout_session_sheet.dart), since it overlapped confusingly with
+  // weightTraining. Don't remove: ExerciseCategory.values.byName() would
+  // throw parsing any old row still holding this value.
   gym,
   weightTraining,
   martialArts,
   hiking,
+  stairs,
+  cricket,
   other;
 
   String get label {
@@ -36,6 +43,10 @@ enum ExerciseCategory {
         return 'Martial Arts';
       case ExerciseCategory.hiking:
         return 'Hiking';
+      case ExerciseCategory.stairs:
+        return 'Stair Climbing';
+      case ExerciseCategory.cricket:
+        return 'Cricket';
       case ExerciseCategory.other:
         return 'Other';
     }
@@ -71,6 +82,10 @@ enum ExerciseCategory {
         return 10.0;
       case ExerciseCategory.hiking:
         return 6.0;
+      case ExerciseCategory.stairs:
+        return 8.8;
+      case ExerciseCategory.cricket:
+        return 5.0;
       case ExerciseCategory.other:
         return 5.0;
     }
@@ -98,6 +113,8 @@ enum ExerciseCategory {
       case ExerciseCategory.gym:
       case ExerciseCategory.weightTraining:
       case ExerciseCategory.martialArts:
+      case ExerciseCategory.stairs:
+      case ExerciseCategory.cricket:
       case ExerciseCategory.other:
         return null;
     }

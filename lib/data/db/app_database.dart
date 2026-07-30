@@ -132,6 +132,26 @@ class AppDatabase {
         'ALTER TABLE user_profile ADD COLUMN calorie_reset_minute_of_day INTEGER NOT NULL DEFAULT 0;',
       );
     }
+
+    if (oldVersion < 8) {
+      // v8 adds: sleep_log.note — mirrors exercise_log.note, lets a
+      // Health Connect auto-synced sleep entry be told apart from a
+      // manual one, so a re-sync can safely refresh a stale auto-synced
+      // row instead of the previous behavior of never touching a day
+      // that already had *any* row (auto or manual).
+      await db.execute('ALTER TABLE sleep_log ADD COLUMN note TEXT;');
+
+      // v8 also adds: cheat-day settings on user_profile — opt-in,
+      // which day of the week (1-7, DateTime.weekday) it falls on, and
+      // how many bonus calories that day's goal gets.
+      await db.execute(
+        'ALTER TABLE user_profile ADD COLUMN cheat_day_enabled INTEGER NOT NULL DEFAULT 0;',
+      );
+      await db.execute('ALTER TABLE user_profile ADD COLUMN cheat_day_of_week INTEGER;');
+      await db.execute(
+        'ALTER TABLE user_profile ADD COLUMN cheat_day_bonus_kcal INTEGER NOT NULL DEFAULT 300;',
+      );
+    }
   }
 
   /// Closes the database connection. Mainly useful for tests; the app

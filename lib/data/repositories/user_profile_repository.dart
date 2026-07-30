@@ -95,4 +95,15 @@ class UserProfileRepository {
       where: 'id = 1',
     );
   }
+
+  /// Keeps `user_profile.weight_kg` — the "current weight" used for
+  /// BMR/TDEE/macro calculations and shown on the Profile screen — in
+  /// sync with the latest weigh-in. Without this, a check-in logged via
+  /// Home's weight tile only ever lands in `weight_log`, leaving Profile
+  /// (and the calorie-goal math) silently stuck on whatever weight was
+  /// entered at onboarding.
+  Future<void> setWeightKg(double weightKg) async {
+    final db = await _db;
+    await db.update('user_profile', {'weight_kg': weightKg}, where: 'id = 1');
+  }
 }

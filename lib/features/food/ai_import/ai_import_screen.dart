@@ -55,6 +55,13 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
   String? _parseError;
   ParsedMealDraft? _draft;
 
+  /// Both default OFF — every AI import used to unconditionally create a
+  /// reusable meal template and permanently save every parsed ingredient
+  /// as a custom food, even for a one-off dish never repeated, which
+  /// cluttered "Your Ingredients" and the meal list with near-duplicates.
+  bool _saveAsMeal = false;
+  bool _addIngredientsToFoods = false;
+
   @override
   void initState() {
     super.initState();
@@ -170,11 +177,18 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
     setState(() => _saving = true);
 
     final foodRepo = ref.read(foodRepositoryProvider);
+    // A meal builder ingredient pick always needs a real, persisted Food
+    // (there's nothing else to reference); saving as a reusable meal
+    // requires it too, since meal_items.food_id is a real foreign key.
+    // Otherwise, honor the "Add ingredients to Your Ingredients" choice.
+    final persistIngredients = widget.forMealIngredient || _saveAsMeal || _addIngredientsToFoods;
     final resolved = <MealIngredient>[];
     for (final ingredient in draft.ingredients) {
       // Reuse an existing database food by name instead of creating a
       // near-duplicate every time the same ingredient shows up.
-      final food = await resolveOrCreateFood(foodRepo, ingredient.food);
+      final food = persistIngredients
+          ? await resolveOrCreateFood(foodRepo, ingredient.food)
+          : unsavedFoodFrom(ingredient.food);
       resolved.add(MealIngredient(food: food, grams: ingredient.grams));
     }
 
@@ -189,23 +203,31 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
     }
 
     if (resolved.length == 1) {
-      // Single ingredient — go straight into logging it, same as before.
+      // Single ingredient — go straight into logging it, same as before,
+      // prefilled with the AI's (possibly user-edited) gram estimate
+      // instead of defaulting to 100g.
       final logged = await showModalBottomSheet<bool>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => QuantityEntrySheet(food: resolved.first.food),
+        builder: (_) =>
+            QuantityEntrySheet(food: resolved.first.food, initialGrams: resolved.first.grams),
       );
       if (mounted) Navigator.of(context).pop(logged ?? true);
       return;
     }
 
-    // Multiple ingredients — save as an ad-hoc meal and log it, same flow
-    // as "Generate a Meal with AI".
+    // Multiple ingredients — log as a combined entry, same flow as
+    // "Generate a Meal with AI". Only actually persisted as a reusable
+    // Meal template if _saveAsMeal is ticked; otherwise this Meal is
+    // just an in-memory vehicle for MealLogSheet's serving-size/meal-slot
+    // UI (MealLogSheet never reads its `id`, and hides Edit/Delete for
+    // an unsaved one).
     final mealName = _mealNameController.text.trim().isEmpty
         ? draft.mealName
         : _mealNameController.text.trim();
-    final mealId = await ref.read(mealRepositoryProvider).createMeal(mealName, resolved);
+    final mealId =
+        _saveAsMeal ? await ref.read(mealRepositoryProvider).createMeal(mealName, resolved) : null;
 
     if (!mounted) return;
     final meal = Meal(id: mealId, name: mealName, createdAt: DateTime.now(), ingredients: resolved);
@@ -379,6 +401,32 @@ class _AiImportScreenState extends ConsumerState<AiImportScreen> with WidgetsBin
                   ],
                 ),
               ),
+              if (!widget.forMealIngredient) ...[
+                const SizedBox(height: ScampiSpacing.sm),
+                if (isMultiIngredient)
+                  CheckboxListTile(
+                    value: _saveAsMeal,
+                    onChanged: (v) => setState(() => _saveAsMeal = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Save as a reusable meal'),
+                    subtitle: const Text("Off logs this once without cluttering your meal list"),
+                  ),
+                CheckboxListTile(
+                  value: _addIngredientsToFoods || _saveAsMeal,
+                  onChanged: _saveAsMeal ? null : (v) => setState(() => _addIngredientsToFoods = v ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Add ingredients to Your Ingredients'),
+                  subtitle: Text(
+                    _saveAsMeal
+                        ? 'Required — a saved meal needs its ingredients saved too'
+                        : "Off keeps this one-off, so similar AI-named ingredients don't pile up",
+                  ),
+                ),
+              ],
               const SizedBox(height: ScampiSpacing.md),
               SizedBox(
                 width: double.infinity,

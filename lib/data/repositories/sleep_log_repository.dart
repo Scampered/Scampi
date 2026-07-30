@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../../core/utils/day_boundary.dart';
 import '../db/app_database.dart';
 import '../models/sleep_log_entry.dart';
 
@@ -23,9 +24,14 @@ class SleepLogRepository {
     await db.delete('sleep_log', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<SleepLogEntry?> entryForDay(DateTime day) async {
+  /// [resetMinuteOfDay] resolves [day] to the correct logical-day date
+  /// key (see `dayWindowFor`) before looking it up — matters for anyone
+  /// with a non-midnight reset time, so viewing "yesterday" on Home's
+  /// day-navigator around 1am still finds the right night's entry.
+  Future<SleepLogEntry?> entryForDay(DateTime day, {int resetMinuteOfDay = 0}) async {
     final db = await _db;
-    final key = DateTime(day.year, day.month, day.day).toIso8601String();
+    final window = dayWindowFor(day, resetMinuteOfDay);
+    final key = DateTime(window.start.year, window.start.month, window.start.day).toIso8601String();
     final rows = await db.query('sleep_log', where: 'date = ?', whereArgs: [key], limit: 1);
     if (rows.isEmpty) return null;
     return SleepLogEntry.fromMap(rows.first);

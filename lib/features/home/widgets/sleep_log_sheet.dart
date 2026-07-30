@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/health/health_sync_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/sleep_log_entry.dart';
@@ -12,9 +13,13 @@ import '../../../data/repositories/data_refresh_signal.dart';
 /// "how long you slept before today" the way the Progress chart and
 /// Home ring both expect.
 class SleepLogSheet extends ConsumerStatefulWidget {
-  const SleepLogSheet({super.key, this.existing});
+  const SleepLogSheet({super.key, this.existing, required this.day});
 
   final SleepLogEntry? existing;
+
+  /// Which day this sleep belongs to — the currently-selected day on
+  /// Home's day-navigator.
+  final DateTime day;
 
   @override
   ConsumerState<SleepLogSheet> createState() => _SleepLogSheetState();
@@ -64,12 +69,12 @@ class _SleepLogSheetState extends ConsumerState<SleepLogSheet> {
     if (_saving) return;
     setState(() => _saving = true);
 
-    final today = DateTime.now();
-    DateTime timeOn(TimeOfDay t) => DateTime(today.year, today.month, today.day, t.hour, t.minute);
+    final day = widget.day;
+    DateTime timeOn(TimeOfDay t) => DateTime(day.year, day.month, day.day, t.hour, t.minute);
 
     await ref.read(sleepLogRepositoryProvider).logEntry(
           SleepLogEntry(
-            date: today,
+            date: day,
             hours: _hours,
             bedtime: timeOn(_bedtime),
             wakeTime: timeOn(_wakeTime),
@@ -114,6 +119,14 @@ class _SleepLogSheetState extends ConsumerState<SleepLogSheet> {
                 ),
               ),
               Text('Log Sleep', style: theme.textTheme.titleLarge),
+              if (widget.existing?.note == healthSyncSleepNote) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Auto-synced from Health Connect — saving here will make '
+                  "it a manual entry, so it won't be overwritten by future syncs.",
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               const SizedBox(height: ScampiSpacing.md),
               Row(
                 children: [

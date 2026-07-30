@@ -161,6 +161,9 @@ class UserProfile {
     this.customDailyOffset = 0,
     this.unitsSystem = UnitsSystem.metric,
     this.calorieResetMinuteOfDay = 0,
+    this.cheatDayEnabled = false,
+    this.cheatDayOfWeek,
+    this.cheatDayBonusKcal = 300,
   });
 
   final int id;
@@ -195,6 +198,17 @@ class UserProfile {
   /// it) have a day boundary that actually matches their schedule.
   final int calorieResetMinuteOfDay;
 
+  /// Whether a weekly cheat day is turned on — off by default.
+  final bool cheatDayEnabled;
+
+  /// Which day of the week the cheat day falls on, 1-7
+  /// ([DateTime.weekday] convention, Monday = 1). Null when
+  /// [cheatDayEnabled] is false, or before the user has picked one.
+  final int? cheatDayOfWeek;
+
+  /// Bonus calories added to that day's goal.
+  final int cheatDayBonusKcal;
+
   int get dailyCalorieOffset =>
       goalMode == GoalMode.custom ? customDailyOffset : goalMode.defaultDailyOffset;
 
@@ -213,6 +227,10 @@ class UserProfile {
     int? customDailyOffset,
     UnitsSystem? unitsSystem,
     int? calorieResetMinuteOfDay,
+    bool? cheatDayEnabled,
+    int? cheatDayOfWeek,
+    bool clearCheatDayOfWeek = false,
+    int? cheatDayBonusKcal,
   }) {
     return UserProfile(
       id: id,
@@ -229,6 +247,9 @@ class UserProfile {
       customDailyOffset: customDailyOffset ?? this.customDailyOffset,
       unitsSystem: unitsSystem ?? this.unitsSystem,
       calorieResetMinuteOfDay: calorieResetMinuteOfDay ?? this.calorieResetMinuteOfDay,
+      cheatDayEnabled: cheatDayEnabled ?? this.cheatDayEnabled,
+      cheatDayOfWeek: clearCheatDayOfWeek ? null : (cheatDayOfWeek ?? this.cheatDayOfWeek),
+      cheatDayBonusKcal: cheatDayBonusKcal ?? this.cheatDayBonusKcal,
     );
   }
 
@@ -247,6 +268,9 @@ class UserProfile {
       'custom_daily_offset': customDailyOffset,
       'units_system': unitsSystem.name,
       'calorie_reset_minute_of_day': calorieResetMinuteOfDay,
+      'cheat_day_enabled': cheatDayEnabled ? 1 : 0,
+      'cheat_day_of_week': cheatDayOfWeek,
+      'cheat_day_bonus_kcal': cheatDayBonusKcal,
     };
   }
 
@@ -271,6 +295,10 @@ class UserProfile {
       unitsSystem: UnitsSystem.values.byName(map['units_system'] as String),
       // Older rows (before this column existed) fall back to midnight.
       calorieResetMinuteOfDay: map['calorie_reset_minute_of_day'] as int? ?? 0,
+      // Older rows (before these columns existed) fall back to "off".
+      cheatDayEnabled: (map['cheat_day_enabled'] as int? ?? 0) == 1,
+      cheatDayOfWeek: map['cheat_day_of_week'] as int?,
+      cheatDayBonusKcal: map['cheat_day_bonus_kcal'] as int? ?? 300,
     );
   }
 }

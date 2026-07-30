@@ -18,7 +18,11 @@ const int _maxSingleEntryMl = 5000;
 /// instead of only being fixable by drinking less water than the app
 /// thinks you did.
 class WaterLogSheet extends ConsumerStatefulWidget {
-  const WaterLogSheet({super.key});
+  const WaterLogSheet({super.key, required this.day});
+
+  /// Which day's entries to show/add to — the currently-selected day on
+  /// Home's day-navigator (defaults to today from the caller).
+  final DateTime day;
 
   @override
   ConsumerState<WaterLogSheet> createState() => _WaterLogSheetState();
@@ -47,8 +51,14 @@ class _WaterLogSheetState extends ConsumerState<WaterLogSheet> {
     }
     setState(() => _error = null);
 
+    final now = DateTime.now();
+    // Adding to a past day (via the day-navigator) still timestamps the
+    // entry with the current time-of-day, just on that day's date — so
+    // it's a correction for "I forgot to log this that day," not a claim
+    // about exactly when it happened.
+    final loggedAt = DateTime(widget.day.year, widget.day.month, widget.day.day, now.hour, now.minute);
     await ref.read(waterLogRepositoryProvider).logEntry(
-          WaterLogEntry(loggedAt: DateTime.now(), amountMl: amount),
+          WaterLogEntry(loggedAt: loggedAt, amountMl: amount),
         );
     ref.read(dataRefreshSignalProvider.notifier).bump();
     _amountController.clear();
@@ -57,7 +67,7 @@ class _WaterLogSheetState extends ConsumerState<WaterLogSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final entriesAsync = ref.watch(todayWaterLogProvider);
+    final entriesAsync = ref.watch(dayWaterLogProvider(widget.day));
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -114,7 +124,7 @@ class _WaterLogSheetState extends ConsumerState<WaterLogSheet> {
                 ],
               ),
               const SizedBox(height: ScampiSpacing.md),
-              Text("Today's entries", style: theme.textTheme.labelLarge),
+              Text('Entries', style: theme.textTheme.labelLarge),
               const SizedBox(height: ScampiSpacing.xs),
               entriesAsync.when(
                 // Keeps the previously-fetched list on screen while a
@@ -161,7 +171,7 @@ class _EntryListState extends ConsumerState<_EntryList> {
     if (entries.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: ScampiSpacing.md),
-        child: Text('Nothing logged yet today.', style: theme.textTheme.bodySmall),
+        child: Text('Nothing logged for this day.', style: theme.textTheme.bodySmall),
       );
     }
 

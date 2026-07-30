@@ -73,6 +73,18 @@ class _WeeklyCalorieCard extends StatelessWidget {
                   alignment: BarChartAlignment.spaceAround,
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+                        '${rod.toY.round()} kcal',
+                        TextStyle(
+                          color: rod.gradient?.colors.first ?? rod.color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
                   titlesData: FlTitlesData(
                     leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -160,8 +172,22 @@ class _WeightTrendCardState extends State<_WeightTrendCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final windowStart = DateTime.now().subtract(Duration(days: _timeframe.days));
-    final filtered = widget.history.where((e) => e.loggedAt.isAfter(windowStart)).toList()
+    var filtered = widget.history.where((e) => e.loggedAt.isAfter(windowStart)).toList()
       ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+
+    // Fewer than 2 weigh-ins in the selected window doesn't mean there's
+    // no trend to show — it just means the history is sparser than the
+    // window, which is common for someone who only checks in every few
+    // weeks. Fall back to plotting everything that exists rather than
+    // hiding a trend line the user does have data for.
+    var effectiveWindowDays = _timeframe.days;
+    var usingFallback = false;
+    if (filtered.length < 2 && widget.history.length >= 2) {
+      filtered = List.of(widget.history)..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+      usingFallback = true;
+      final spanDays = DateTime.now().difference(filtered.first.loggedAt).inDays + 1;
+      if (spanDays > effectiveWindowDays) effectiveWindowDays = spanDays;
+    }
 
     return Card(
       child: Padding(
@@ -183,7 +209,10 @@ class _WeightTrendCardState extends State<_WeightTrendCard> {
             Text(
               filtered.length < 2
                   ? 'Log at least two weigh-ins to see a trend line here.'
-                  : '${filtered.length} check-ins in the last ${_timeframe.label == '1M' ? 'month' : '6 months'}',
+                  : usingFallback
+                      ? 'Showing all ${filtered.length} check-ins — none fall within the last '
+                          '${_timeframe.label == '1M' ? 'month' : '6 months'}'
+                      : '${filtered.length} check-ins in the last ${_timeframe.label == '1M' ? 'month' : '6 months'}',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: ScampiSpacing.md),
@@ -192,7 +221,7 @@ class _WeightTrendCardState extends State<_WeightTrendCard> {
             else
               SizedBox(
                 height: 200,
-                child: _WeightLineChart(entries: filtered, windowDays: _timeframe.days),
+                child: _WeightLineChart(entries: filtered, windowDays: effectiveWindowDays),
               ),
           ],
         ),
@@ -435,6 +464,18 @@ class _SleepTrendCard extends StatelessWidget {
                   alignment: BarChartAlignment.spaceAround,
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+                        '${rod.toY.toStringAsFixed(1)}h',
+                        TextStyle(
+                          color: rod.gradient?.colors.first ?? rod.color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(

@@ -71,6 +71,24 @@ class WeightLogRepository {
     return WeightLogEntry.fromMap(rows.first);
   }
 
+  /// Same idea as [mostRecent], but "as of" a given day — the latest
+  /// weigh-in at or before the end of that day's window, so viewing a
+  /// past day on Home's day-navigator shows what your weight actually
+  /// was then, not today's.
+  Future<WeightLogEntry?> mostRecentAsOf(DateTime day, {int resetMinuteOfDay = 0}) async {
+    final db = await _db;
+    final window = dayWindowFor(day, resetMinuteOfDay);
+    final rows = await db.query(
+      'weight_log',
+      where: 'logged_at < ?',
+      whereArgs: [window.end.toIso8601String()],
+      orderBy: 'logged_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return WeightLogEntry.fromMap(rows.first);
+  }
+
   Future<List<WeightLogEntry>> history({DateTime? since}) async {
     final db = await _db;
     final rows = await db.query(

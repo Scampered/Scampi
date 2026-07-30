@@ -141,15 +141,20 @@ class _MealLogSheetState extends ConsumerState<MealLogSheet> {
                   Expanded(
                     child: Text(widget.meal.name, style: theme.textTheme.titleLarge),
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(MealSheetResult.edit),
-                    child: const Text('Edit'),
-                  ),
-                  IconButton(
-                    tooltip: 'Delete meal',
-                    icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
-                    onPressed: _delete,
-                  ),
+                  // Nothing to edit/delete for a meal that was never
+                  // actually saved as a template (e.g. an AI import where
+                  // "Save as a reusable meal" was left off).
+                  if (widget.meal.id != null) ...[
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(MealSheetResult.edit),
+                      child: const Text('Edit'),
+                    ),
+                    IconButton(
+                      tooltip: 'Delete meal',
+                      icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
+                      onPressed: _delete,
+                    ),
+                  ],
                 ],
               ),
               Text(

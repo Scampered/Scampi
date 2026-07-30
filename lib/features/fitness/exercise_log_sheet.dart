@@ -147,7 +147,7 @@ class _ExerciseLogSheetState extends ConsumerState<ExerciseLogSheet> {
                 Wrap(
                   spacing: ScampiSpacing.xs,
                   runSpacing: ScampiSpacing.xs,
-                  children: ExerciseCategory.values.map((category) {
+                  children: selectableExerciseCategories.map((category) {
                     final selected = category == _category;
                     return ChoiceChip(
                       avatar: Icon(

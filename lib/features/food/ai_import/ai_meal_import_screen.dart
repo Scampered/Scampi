@@ -36,6 +36,13 @@ class _AiMealImportScreenState extends ConsumerState<AiMealImportScreen>
   String? _parseError;
   ParsedMealDraft? _draft;
 
+  /// Defaults ON here (unlike the general "Add Food with AI" screen) —
+  /// this screen's whole purpose is generating a reusable meal, but the
+  /// user should still be able to turn it off for a one-off they don't
+  /// want cluttering the meal list.
+  bool _saveAsMeal = true;
+  bool _addIngredientsToFoods = false;
+
   @override
   void initState() {
     super.initState();
@@ -144,17 +151,21 @@ class _AiMealImportScreenState extends ConsumerState<AiMealImportScreen>
     setState(() => _saving = true);
 
     final foodRepo = ref.read(foodRepositoryProvider);
+    final persistIngredients = _saveAsMeal || _addIngredientsToFoods;
     final mealIngredients = <MealIngredient>[];
     for (final ingredient in draft.ingredients) {
       // Reuse an existing database food by name instead of creating a
       // near-duplicate every time the same ingredient shows up in a meal.
-      final food = await resolveOrCreateFood(foodRepo, ingredient.food);
+      final food = persistIngredients
+          ? await resolveOrCreateFood(foodRepo, ingredient.food)
+          : unsavedFoodFrom(ingredient.food);
       mealIngredients.add(MealIngredient(food: food, grams: ingredient.grams));
     }
 
     final mealName = _mealNameController.text.trim();
-    final mealId =
-        await ref.read(mealRepositoryProvider).createMeal(mealName, mealIngredients);
+    final mealId = _saveAsMeal
+        ? await ref.read(mealRepositoryProvider).createMeal(mealName, mealIngredients)
+        : null;
 
     if (!mounted) return;
 
@@ -323,6 +334,29 @@ class _AiMealImportScreenState extends ConsumerState<AiMealImportScreen>
                     _Stat(label: 'Carbs', value: '${totals.carbsG.round()}g'),
                     _Stat(label: 'Fat', value: '${totals.fatG.round()}g'),
                   ],
+                ),
+              ),
+              const SizedBox(height: ScampiSpacing.sm),
+              CheckboxListTile(
+                value: _saveAsMeal,
+                onChanged: (v) => setState(() => _saveAsMeal = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Save as a reusable meal'),
+                subtitle: const Text("Off logs this once without adding it to your meal list"),
+              ),
+              CheckboxListTile(
+                value: _addIngredientsToFoods || _saveAsMeal,
+                onChanged: _saveAsMeal ? null : (v) => setState(() => _addIngredientsToFoods = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('Add ingredients to Your Ingredients'),
+                subtitle: Text(
+                  _saveAsMeal
+                      ? 'Required — a saved meal needs its ingredients saved too'
+                      : "Off keeps this one-off, so similar AI-named ingredients don't pile up",
                 ),
               ),
               const SizedBox(height: ScampiSpacing.md),

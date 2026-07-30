@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/theme_mode_controller.dart';
 import '../../core/update/update_provider.dart';
 import '../../core/update/update_screen.dart';
@@ -8,10 +9,16 @@ import '../../core/utils/calorie_calculator.dart';
 import '../../core/health/health_service.dart';
 import '../../core/health/health_sync_controller.dart';
 import '../../data/db/app_database.dart';
+import '../../data/models/user_profile.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../../data/repositories/data_refresh_signal.dart';
 import '../../data/repositories/repository_providers.dart';
 import 'current_profile_provider.dart';
+
+/// Monday-first day-of-week labels, indexed to match [DateTime.weekday]
+/// (1 = Monday .. 7 = Sunday) via `_weekdayLabels[weekday - 1]` — same
+/// list as onboarding_screen.dart's Cheat Day step.
+const List<String> _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /// Profile tab: appearance (theme) settings, and the user's saved
 /// profile with calculated BMR/maintenance calories, plus an edit link
@@ -152,6 +159,8 @@ class ProfileScreen extends ConsumerWidget {
           const _HealthSyncSection(),
           const SizedBox(height: 16),
           const _DailyResetSection(),
+          const SizedBox(height: 16),
+          const _CheatDaySection(),
           const SizedBox(height: 16),
           const _UpdatesSection(),
           const SizedBox(height: 16),
@@ -426,6 +435,137 @@ class _DailyResetSectionState extends ConsumerState<_DailyResetSection> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// "Cheat Day" section: opt-in weekly day where the calorie goal gets a
+/// bonus — same choice offered during onboarding, editable anytime here.
+class _CheatDaySection extends ConsumerStatefulWidget {
+  const _CheatDaySection();
+
+  @override
+  ConsumerState<_CheatDaySection> createState() => _CheatDaySectionState();
+}
+
+class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
+  UserProfile? _profile;
+  bool _loaded = false;
+  late final TextEditingController _bonusController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bonusController = TextEditingController();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _bonusController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final profile = await ref.read(userProfileRepositoryProvider).getProfile();
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _bonusController.text = (profile?.cheatDayBonusKcal ?? 300).toString();
+      _loaded = true;
+    });
+  }
+
+  Future<void> _update(UserProfile Function(UserProfile) update) async {
+    final current = _profile;
+    if (current == null) return;
+    final updated = update(current);
+    await ref.read(userProfileRepositoryProvider).saveProfile(updated);
+    ref.read(dataRefreshSignalProvider.notifier).bump();
+    if (mounted) setState(() => _profile = updated);
+  }
+
+  void _saveBonus() {
+    final bonus = int.tryParse(_bonusController.text.trim());
+    if (bonus == null || bonus < 0) return;
+    _update((p) => p.copyWith(cheatDayBonusKcal: bonus));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectionColor = scampiSelectionColor(context);
+    final profile = _profile;
+    final enabled = profile?.cheatDayEnabled ?? false;
+
+    return _SectionCard(
+      title: 'Cheat Day',
+      child: !_loaded
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pick one day a week where your calorie goal gets a bonus.',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable cheat day'),
+                  value: enabled,
+                  onChanged: profile == null
+                      ? null
+                      : (v) => _update((p) => p.copyWith(
+                            cheatDayEnabled: v,
+                            cheatDayOfWeek: (v && p.cheatDayOfWeek == null) ? DateTime.saturday : null,
+                          )),
+                ),
+                if (enabled) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    children: List.generate(7, (i) {
+                      final weekday = i + 1;
+                      final selected = profile?.cheatDayOfWeek == weekday;
+                      return ChoiceChip(
+                        label: Text(_weekdayLabels[i]),
+                        selected: selected,
+                        onSelected: (_) => _update((p) => p.copyWith(cheatDayOfWeek: weekday)),
+                        selectedColor: selectionColor.withValues(alpha: 0.16),
+                        labelStyle: TextStyle(
+                          color: selected ? selectionColor : null,
+                          fontWeight: selected ? FontWeight.w700 : null,
+                        ),
+                        side: BorderSide(
+                          color: selected ? selectionColor : theme.colorScheme.outlineVariant,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _bonusController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Bonus calories',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(onPressed: _saveBonus, child: const Text('Save')),
+                    ],
+                  ),
+                ],
+              ],
+            ),
     );
   }
 }
