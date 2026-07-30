@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/selected_day_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/food_log_entry.dart';
@@ -9,8 +10,11 @@ import 'food_log_provider.dart';
 import 'food_search_screen.dart';
 import 'widgets/edit_food_log_entry_sheet.dart';
 
-/// Food tab — today's food diary, grouped by meal slot, with a swipe-to-
-/// delete gesture on each entry and an entry point into food search.
+/// Food tab — the food diary for whichever day is currently selected
+/// (shared with Home's day-navigator and the Fitness tab via
+/// [selectedDayProvider], defaulting to today), grouped by meal slot,
+/// with a swipe-to-delete gesture on each entry, tap-to-edit, and an
+/// entry point into food search.
 class FoodScreen extends ConsumerWidget {
   const FoodScreen({super.key});
 
@@ -22,15 +26,19 @@ class FoodScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final entriesAsync = ref.watch(todayFoodLogProvider);
+    final selectedDay = ref.watch(selectedDayProvider);
+    final entriesAsync = ref.watch(dayFoodLogProvider(selectedDay));
+    final isToday = selectedDay.isAtSameMomentAs(dateOnly(DateTime.now()));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Food')),
+      appBar: AppBar(
+        title: Text(isToday ? 'Food' : 'Food · ${selectedDayLabel(selectedDay)}'),
+      ),
       body: entriesAsync.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('$err')),
-        data: (entries) => _FoodLogContent(entries: entries),
+        data: (entries) => _FoodLogContent(entries: entries, isToday: isToday),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => openSearch(context),
@@ -42,9 +50,10 @@ class FoodScreen extends ConsumerWidget {
 }
 
 class _FoodLogContent extends ConsumerStatefulWidget {
-  const _FoodLogContent({required this.entries});
+  const _FoodLogContent({required this.entries, required this.isToday});
 
   final List<FoodLogEntry> entries;
+  final bool isToday;
 
   @override
   ConsumerState<_FoodLogContent> createState() => _FoodLogContentState();
@@ -61,6 +70,7 @@ class _FoodLogContentState extends ConsumerState<_FoodLogContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = widget.entries.where((e) => !_removedIds.contains(e.id)).toList();
+    final dayWord = widget.isToday ? 'today' : 'that day';
 
     if (entries.isEmpty) {
       return Center(
@@ -76,7 +86,7 @@ class _FoodLogContentState extends ConsumerState<_FoodLogContent> {
               ),
               const SizedBox(height: ScampiSpacing.sm),
               Text(
-                'Nothing logged yet today.',
+                'Nothing logged yet $dayWord.',
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: ScampiSpacing.xxs),
@@ -102,7 +112,7 @@ class _FoodLogContentState extends ConsumerState<_FoodLogContent> {
       ),
       children: [
         Text(
-          '${totalCalories.round()} kcal logged today',
+          '${totalCalories.round()} kcal logged $dayWord',
           style: theme.textTheme.titleMedium,
         ),
         const SizedBox(height: ScampiSpacing.md),

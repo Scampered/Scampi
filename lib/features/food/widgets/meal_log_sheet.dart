@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/selected_day_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/food_log_entry.dart';
+import '../../../data/models/food_log_item.dart';
 import '../../../data/models/meal.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../data/repositories/data_refresh_signal.dart';
@@ -58,7 +60,7 @@ class _MealLogSheetState extends ConsumerState<MealLogSheet> {
     final entry = FoodLogEntry(
       foodId: null,
       foodName: widget.meal.name,
-      loggedAt: DateTime.now(),
+      loggedAt: combineDayWithNow(ref.read(selectedDayProvider)),
       mealSlot: _mealSlot,
       quantityMode: QuantityMode.servings,
       grams: widget.meal.totalGrams * _servings,
@@ -69,7 +71,13 @@ class _MealLogSheetState extends ConsumerState<MealLogSheet> {
       fatG: nutrition.fatG,
     );
 
-    await ref.read(foodLogRepositoryProvider).logEntry(entry);
+    // Snapshot each ingredient at its actual logged amount (recipe grams
+    // × servings eaten) so the entry can later be edited
+    // ingredient-by-ingredient, same as editing the meal template itself.
+    final items = widget.meal.ingredients
+        .map((ingredient) => FoodLogItem.fromFood(ingredient.food, ingredient.grams * _servings))
+        .toList();
+    await ref.read(foodLogRepositoryProvider).logEntryWithItems(entry, items);
     ref.read(dataRefreshSignalProvider.notifier).bump();
 
     if (mounted) Navigator.of(context).pop(MealSheetResult.logged);

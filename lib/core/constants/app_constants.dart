@@ -6,7 +6,7 @@ class AppConstants {
 
   // SQLite
   static const String databaseName = 'scampi.db';
-  static const int databaseVersion = 8;
+  static const int databaseVersion = 9;
 
   // Shared preferences keys (non-theme; theme key lives in
   // theme_mode_controller.dart to keep that concern self-contained)

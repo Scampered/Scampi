@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/selected_day_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/exercise_log_entry.dart';
@@ -86,7 +87,7 @@ class _ExerciseLogSheetState extends ConsumerState<ExerciseLogSheet> {
 
     final entry = ExerciseLogEntry(
       category: _category,
-      loggedAt: DateTime.now(),
+      loggedAt: combineDayWithNow(ref.read(selectedDayProvider)),
       durationMinutes: _durationMinutes,
       distanceKm: double.tryParse(_distanceController.text),
       intensity: _intensity,

@@ -1,21 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/calorie_calculator.dart';
+import '../../core/utils/day_boundary.dart';
 import '../../data/models/water_weight_log.dart';
 import '../../data/models/sleep_log_entry.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
 
-/// One day's calorie total vs goal, for the weekly bar chart.
+/// One day's calorie total vs goal, for the weekly bar chart. [goal] is
+/// that specific day's own goal — including a cheat-day bonus if that
+/// day was the configured cheat day — not just today's current goal
+/// applied uniformly across the week.
 class DailyCalorieProgress {
   const DailyCalorieProgress({
     required this.day,
     required this.consumed,
+    required this.burned,
     required this.goal,
+    required this.isCheatDay,
   });
 
   final DateTime day;
   final double consumed;
+  final double burned;
   final int goal;
+  final bool isCheatDay;
+
+  /// What the bar actually plots — eaten minus burned, matching the
+  /// "kcal remaining" math used everywhere else (Home's ring, etc.),
+  /// instead of raw calories eaten.
+  double get net => consumed - burned;
 }
 
 class ProgressSummary {
@@ -40,6 +53,7 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
 
   final profileRepo = ref.read(userProfileRepositoryProvider);
   final foodLogRepo = ref.read(foodLogRepositoryProvider);
+  final exerciseLogRepo = ref.read(exerciseLogRepositoryProvider);
   final weightLogRepo = ref.read(weightLogRepositoryProvider);
   final sleepLogRepo = ref.read(sleepLogRepositoryProvider);
 
@@ -50,7 +64,7 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
           latestWeight != null ? profile.copyWith(weightKg: latestWeight.weightKg) : profile,
         )
       : null;
-  final calorieGoal = (calculation?.dailyCalorieGoal ?? 2000).round();
+  final baseCalorieGoal = (calculation?.dailyCalorieGoal ?? 2000).round();
   final resetMinuteOfDay = profile?.calorieResetMinuteOfDay ?? 0;
 
   final today = DateTime.now();
@@ -61,7 +75,23 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
     final totals = await foodLogRepo.totalsForDay(day, resetMinuteOfDay: resetMinuteOfDay);
-    weeklyCalories.add(DailyCalorieProgress(day: day, consumed: totals.calories, goal: calorieGoal));
+    final burned = await exerciseLogRepo.totalCaloriesBurnedForDay(
+      day,
+      resetMinuteOfDay: resetMinuteOfDay,
+    );
+    // Same check home_summary_provider.dart uses — that day's own goal,
+    // not today's, so a past cheat day is reflected correctly here too.
+    final isCheatDay = profile != null &&
+        profile.cheatDayEnabled &&
+        profile.cheatDayOfWeek == dayWindowFor(day, resetMinuteOfDay).start.weekday;
+    final dayGoal = baseCalorieGoal + (isCheatDay ? profile.cheatDayBonusKcal : 0);
+    weeklyCalories.add(DailyCalorieProgress(
+      day: day,
+      consumed: totals.calories,
+      burned: burned,
+      goal: dayGoal,
+      isCheatDay: isCheatDay,
+    ));
   }
 
   // Fetched wide enough to cover the chart's longest selectable timeframe
@@ -76,6 +106,6 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
     weeklyCalories: weeklyCalories,
     weightHistory: weightHistory,
     sleepHistory: sleepHistory,
-    calorieGoal: calorieGoal,
+    calorieGoal: baseCalorieGoal,
   );
 });

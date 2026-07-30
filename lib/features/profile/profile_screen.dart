@@ -20,6 +20,18 @@ import 'current_profile_provider.dart';
 /// list as onboarding_screen.dart's Cheat Day step.
 const List<String> _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/// Full day names, indexed the same way as [_weekdayLabels] — used for
+/// the Cheat Day section's collapsed "Every {Day}" summary.
+const List<String> _weekdayFullLabels = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
 /// Profile tab: appearance (theme) settings, and the user's saved
 /// profile with calculated BMR/maintenance calories, plus an edit link
 /// that reuses [OnboardingScreen] pre-filled with the existing profile.
@@ -346,12 +358,64 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
               Text(
                 'Last sync failed: ${status.lastError}',
                 style: TextStyle(color: theme.colorScheme.error, fontSize: 12),
+              )
+            else if (status.lastOutcome != null) ...[
+              const SizedBox(height: 2),
+              _SyncOutcomeLine(
+                label: 'Steps',
+                synced: status.lastOutcome!.stepsSynced,
+                skipReason: status.lastOutcome!.stepsSkipReason,
               ),
+              _SyncOutcomeLine(
+                label: 'Sleep',
+                synced: status.lastOutcome!.sleepSynced,
+                skipReason: status.lastOutcome!.sleepSkipReason,
+              ),
+            ],
           ],
           if (_error != null) ...[
             const SizedBox(height: 4),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One line of the last sync's per-item result — makes a silent skip (a
+/// manual entry already existed, or Health Connect just had nothing for
+/// that day) visibly different from a genuine failure, instead of both
+/// looking like "it didn't work" with no explanation.
+class _SyncOutcomeLine extends StatelessWidget {
+  const _SyncOutcomeLine({required this.label, required this.synced, this.skipReason});
+
+  final String label;
+  final bool synced;
+  final String? skipReason;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            synced ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+            size: 14,
+            color: synced
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              synced ? '$label synced' : '$label: ${skipReason ?? 'not synced'}',
+              style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
+            ),
+          ),
         ],
       ),
     );
@@ -451,6 +515,12 @@ class _CheatDaySection extends ConsumerStatefulWidget {
 class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
   UserProfile? _profile;
   bool _loaded = false;
+
+  /// Whether the day-picker/bonus UI is expanded. Starts collapsed once a
+  /// day is already configured (so a returning user just sees "Every
+  /// Friday" + Edit), and expanded when there's nothing configured yet
+  /// (first-time setup shouldn't require an extra tap to get started).
+  bool _editing = false;
   late final TextEditingController _bonusController;
 
   @override
@@ -472,6 +542,7 @@ class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
     setState(() {
       _profile = profile;
       _bonusController.text = (profile?.cheatDayBonusKcal ?? 300).toString();
+      _editing = profile?.cheatDayOfWeek == null;
       _loaded = true;
     });
   }
@@ -485,10 +556,23 @@ class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
     if (mounted) setState(() => _profile = updated);
   }
 
-  void _saveBonus() {
+  void _toggleEnabled(bool value) {
+    final current = _profile;
+    if (current == null) return;
+    final firstTimeSetup = value && current.cheatDayOfWeek == null;
+    _update((p) => p.copyWith(
+          cheatDayEnabled: value,
+          cheatDayOfWeek: firstTimeSetup ? DateTime.saturday : null,
+        ));
+    if (firstTimeSetup) setState(() => _editing = true);
+  }
+
+  void _saveAndCollapse() {
     final bonus = int.tryParse(_bonusController.text.trim());
-    if (bonus == null || bonus < 0) return;
-    _update((p) => p.copyWith(cheatDayBonusKcal: bonus));
+    if (bonus != null && bonus >= 0) {
+      _update((p) => p.copyWith(cheatDayBonusKcal: bonus));
+    }
+    setState(() => _editing = false);
   }
 
   @override
@@ -497,6 +581,7 @@ class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
     final selectionColor = scampiSelectionColor(context);
     final profile = _profile;
     final enabled = profile?.cheatDayEnabled ?? false;
+    final weekday = profile?.cheatDayOfWeek;
 
     return _SectionCard(
       title: 'Cheat Day',
@@ -517,24 +602,35 @@ class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Enable cheat day'),
                   value: enabled,
-                  onChanged: profile == null
-                      ? null
-                      : (v) => _update((p) => p.copyWith(
-                            cheatDayEnabled: v,
-                            cheatDayOfWeek: (v && p.cheatDayOfWeek == null) ? DateTime.saturday : null,
-                          )),
+                  onChanged: profile == null ? null : _toggleEnabled,
                 ),
-                if (enabled) ...[
+                if (enabled && !_editing && weekday != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Every ${_weekdayFullLabels[weekday - 1]}',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => _editing = true),
+                        child: const Text('Edit'),
+                      ),
+                    ],
+                  ),
+                ] else if (enabled && _editing) ...[
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 8,
                     children: List.generate(7, (i) {
-                      final weekday = i + 1;
-                      final selected = profile?.cheatDayOfWeek == weekday;
+                      final day = i + 1;
+                      final selected = weekday == day;
                       return ChoiceChip(
                         label: Text(_weekdayLabels[i]),
                         selected: selected,
-                        onSelected: (_) => _update((p) => p.copyWith(cheatDayOfWeek: weekday)),
+                        onSelected: (_) => _update((p) => p.copyWith(cheatDayOfWeek: day)),
                         selectedColor: selectionColor.withValues(alpha: 0.16),
                         labelStyle: TextStyle(
                           color: selected ? selectionColor : null,
@@ -560,7 +656,7 @@ class _CheatDaySectionState extends ConsumerState<_CheatDaySection> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(onPressed: _saveBonus, child: const Text('Save')),
+                      FilledButton(onPressed: _saveAndCollapse, child: const Text('Save')),
                     ],
                   ),
                 ],

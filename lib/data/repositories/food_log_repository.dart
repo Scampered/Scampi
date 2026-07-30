@@ -3,6 +3,7 @@ import '../../core/utils/day_boundary.dart';
 import '../db/app_database.dart';
 import '../models/food.dart';
 import '../models/food_log_entry.dart';
+import '../models/food_log_item.dart';
 
 /// Data access for the food diary (`food_log` table).
 class FoodLogRepository {
@@ -20,6 +21,7 @@ class FoodLogRepository {
 
   Future<void> deleteEntry(int id) async {
     final db = await _db;
+    // food_log_items rows cascade via their FK's ON DELETE CASCADE.
     await db.delete('food_log', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -29,6 +31,48 @@ class FoodLogRepository {
   Future<void> updateEntry(FoodLogEntry entry) async {
     final db = await _db;
     await db.update('food_log', entry.toMap(), where: 'id = ?', whereArgs: [entry.id]);
+  }
+
+  /// Logs a multi-ingredient entry (from a meal or an AI import with
+  /// several ingredients) along with its per-ingredient snapshot, so it
+  /// can later be edited ingredient-by-ingredient rather than only as a
+  /// single grams/macro total. Single-food entries should keep using
+  /// [logEntry] — they have no ingredients to snapshot.
+  Future<int> logEntryWithItems(FoodLogEntry entry, List<FoodLogItem> items) async {
+    final db = await _db;
+    return db.transaction((txn) async {
+      final id = await txn.insert('food_log', entry.toMap());
+      for (final item in items) {
+        await txn.insert('food_log_items', item.toMap(id));
+      }
+      return id;
+    });
+  }
+
+  /// The ingredient snapshot for a [logEntryWithItems]-logged entry.
+  /// Empty for entries logged via [logEntry], which never have one.
+  Future<List<FoodLogItem>> itemsForEntry(int foodLogId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'food_log_items',
+      where: 'food_log_id = ?',
+      whereArgs: [foodLogId],
+    );
+    return rows.map(FoodLogItem.fromMap).toList();
+  }
+
+  /// Replaces an entry's aggregate totals and its full ingredient list —
+  /// ingredients are replaced wholesale (delete then re-insert), same
+  /// pattern as `MealRepository.updateMeal`. [entry.id] must be set.
+  Future<void> updateEntryWithItems(FoodLogEntry entry, List<FoodLogItem> items) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.update('food_log', entry.toMap(), where: 'id = ?', whereArgs: [entry.id]);
+      await txn.delete('food_log_items', where: 'food_log_id = ?', whereArgs: [entry.id]);
+      for (final item in items) {
+        await txn.insert('food_log_items', item.toMap(entry.id!));
+      }
+    });
   }
 
   /// All entries logged on the given calendar day (local time), ordered

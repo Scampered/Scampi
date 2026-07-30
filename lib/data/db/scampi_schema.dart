@@ -129,6 +129,31 @@ class ScampiSchema {
   static const String createFoodLogDateIndex =
       'CREATE INDEX idx_food_log_logged_at ON food_log(logged_at);';
 
+  /// Per-instance ingredient snapshot for a [createFoodLog] row that came
+  /// from a meal/AI import with more than one ingredient — lets editing
+  /// that entry later adjust individual ingredients or a servings
+  /// multiplier, the same way editing a [createMeals] template does,
+  /// without retroactively changing the meal template itself. Rates are
+  /// stored per-100g (not absolute) so scaling `grams` (e.g. a servings
+  /// multiplier) recomputes nutrition consistently. A single-food entry
+  /// logged directly (not from a meal) has no rows here at all.
+  static const String createFoodLogItems = '''
+    CREATE TABLE food_log_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      food_log_id INTEGER NOT NULL REFERENCES food_log(id) ON DELETE CASCADE,
+      food_id INTEGER REFERENCES foods(id),
+      food_name TEXT NOT NULL,
+      grams REAL NOT NULL,
+      calories_per_100g REAL NOT NULL,
+      protein_per_100g REAL NOT NULL,
+      carbs_per_100g REAL NOT NULL,
+      fat_per_100g REAL NOT NULL
+    );
+  ''';
+
+  static const String createFoodLogItemsFoodLogIndex =
+      'CREATE INDEX idx_food_log_items_food_log_id ON food_log_items(food_log_id);';
+
   static const String createExerciseLog = '''
     CREATE TABLE exercise_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,6 +244,8 @@ class ScampiSchema {
     createMealItemsMealIndex,
     createFoodLog,
     createFoodLogDateIndex,
+    createFoodLogItems,
+    createFoodLogItemsFoodLogIndex,
     createExerciseLog,
     createExerciseLogDateIndex,
     createWaterLog,

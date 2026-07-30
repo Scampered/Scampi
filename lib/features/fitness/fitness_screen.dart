@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/health/health_sync_service.dart';
+import '../../core/selected_day_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/exercise_log_entry.dart';
@@ -13,8 +14,10 @@ import 'fitness_log_provider.dart';
 import 'workout_session_controller.dart';
 import 'workout_session_sheet.dart';
 
-/// Fitness tab — today's exercise log with a swipe-to-delete gesture on
-/// each entry and a bottom sheet for logging a new session.
+/// Fitness tab — the exercise log for whichever day is currently selected
+/// (shared with Home and Food via [selectedDayProvider], defaulting to
+/// today), with a swipe-to-delete gesture on each entry and a bottom
+/// sheet for logging a new session.
 class FitnessScreen extends ConsumerWidget {
   const FitnessScreen({super.key});
 
@@ -28,15 +31,19 @@ class FitnessScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final entriesAsync = ref.watch(todayExerciseLogProvider);
+    final selectedDay = ref.watch(selectedDayProvider);
+    final entriesAsync = ref.watch(dayExerciseLogProvider(selectedDay));
+    final isToday = selectedDay.isAtSameMomentAs(dateOnly(DateTime.now()));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Fitness')),
+      appBar: AppBar(
+        title: Text(isToday ? 'Fitness' : 'Fitness · ${selectedDayLabel(selectedDay)}'),
+      ),
       body: entriesAsync.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('$err')),
-        data: (entries) => _FitnessLogContent(entries: entries),
+        data: (entries) => _FitnessLogContent(entries: entries, isToday: isToday),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => openLogSheet(context),
@@ -146,9 +153,10 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
 }
 
 class _FitnessLogContent extends ConsumerStatefulWidget {
-  const _FitnessLogContent({required this.entries});
+  const _FitnessLogContent({required this.entries, required this.isToday});
 
   final List<ExerciseLogEntry> entries;
+  final bool isToday;
 
   @override
   ConsumerState<_FitnessLogContent> createState() => _FitnessLogContentState();
@@ -180,7 +188,10 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = widget.entries.where((e) => !_removedIds.contains(e.id)).toList();
-    final session = ref.watch(workoutSessionControllerProvider);
+    // A live session is inherently "right now" — only show/offer it while
+    // viewing today, same as Home's "Start Fast".
+    final session = widget.isToday ? ref.watch(workoutSessionControllerProvider) : null;
+    final dayWord = widget.isToday ? 'today' : 'that day';
 
     final totalCalories = entries.fold<double>(0, (sum, e) => sum + e.caloriesBurned);
     final totalMinutes = entries.fold<int>(0, (sum, e) => sum + e.durationMinutes);
@@ -204,7 +215,7 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${totalCalories.round()} kcal burned today',
+                            '${totalCalories.round()} kcal burned $dayWord',
                             style: theme.textTheme.titleMedium,
                           ),
                           Text(
@@ -215,7 +226,7 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
                         ],
                       ),
               ),
-              if (session == null)
+              if (session == null && widget.isToday)
                 OutlinedButton.icon(
                   onPressed: () => showModalBottomSheet<void>(
                     context: context,
@@ -243,7 +254,7 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
                         ),
                         const SizedBox(height: ScampiSpacing.sm),
                         Text(
-                          'Nothing logged yet today.',
+                          'Nothing logged yet $dayWord.',
                           style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(height: ScampiSpacing.xxs),

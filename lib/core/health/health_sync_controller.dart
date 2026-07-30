@@ -5,6 +5,10 @@ import 'health_sync_service.dart';
 const _healthSyncEnabledPrefsKey = 'scampi_health_sync_enabled';
 const _healthSyncLastSyncedAtPrefsKey = 'scampi_health_last_synced_at';
 const _healthSyncLastErrorPrefsKey = 'scampi_health_last_error';
+const _healthSyncStepsSyncedPrefsKey = 'scampi_health_steps_synced';
+const _healthSyncStepsSkipReasonPrefsKey = 'scampi_health_steps_skip_reason';
+const _healthSyncSleepSyncedPrefsKey = 'scampi_health_sleep_synced';
+const _healthSyncSleepSkipReasonPrefsKey = 'scampi_health_sleep_skip_reason';
 
 /// Whether the user has opted in to syncing steps/sleep from Health
 /// Connect. Off by default — this reads sensitive health data, so it
@@ -31,14 +35,16 @@ final healthSyncEnabledProvider = StateNotifierProvider<HealthSyncController, bo
 );
 
 /// Last known outcome of a Health Connect sync attempt — surfaced in
-/// Profile so a failure is visible instead of silently swallowed (which is
-/// what [HealthSyncService.syncToday]'s callers do, since a background
-/// sync should never interrupt the user with an error dialog).
+/// Profile so a failure (or a silent skip, e.g. "no sleep data found") is
+/// visible instead of looking identical to success (which is what
+/// [HealthSyncService.syncToday]'s callers do on the happy path, since a
+/// background sync should never interrupt the user with an error dialog).
 class HealthSyncStatus {
-  const HealthSyncStatus({this.lastSyncedAt, this.lastError});
+  const HealthSyncStatus({this.lastSyncedAt, this.lastError, this.lastOutcome});
 
   final DateTime? lastSyncedAt;
   final String? lastError;
+  final HealthSyncOutcome? lastOutcome;
 }
 
 class HealthSyncStatusController extends StateNotifier<HealthSyncStatus> {
@@ -49,22 +55,48 @@ class HealthSyncStatusController extends StateNotifier<HealthSyncStatus> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final iso = prefs.getString(_healthSyncLastSyncedAtPrefsKey);
+    final stepsSynced = prefs.getBool(_healthSyncStepsSyncedPrefsKey);
+    final sleepSynced = prefs.getBool(_healthSyncSleepSyncedPrefsKey);
     state = HealthSyncStatus(
       lastSyncedAt: iso != null ? DateTime.tryParse(iso) : null,
       lastError: prefs.getString(_healthSyncLastErrorPrefsKey),
+      lastOutcome: stepsSynced != null && sleepSynced != null
+          ? HealthSyncOutcome(
+              stepsSynced: stepsSynced,
+              stepsSkipReason: prefs.getString(_healthSyncStepsSkipReasonPrefsKey),
+              sleepSynced: sleepSynced,
+              sleepSkipReason: prefs.getString(_healthSyncSleepSkipReasonPrefsKey),
+            )
+          : null,
     );
   }
 
-  Future<void> recordSuccess() async {
+  Future<void> recordSuccess(HealthSyncOutcome outcome) async {
     final now = DateTime.now();
-    state = HealthSyncStatus(lastSyncedAt: now, lastError: null);
+    state = HealthSyncStatus(lastSyncedAt: now, lastError: null, lastOutcome: outcome);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_healthSyncLastSyncedAtPrefsKey, now.toIso8601String());
     await prefs.remove(_healthSyncLastErrorPrefsKey);
+    await prefs.setBool(_healthSyncStepsSyncedPrefsKey, outcome.stepsSynced);
+    await prefs.setBool(_healthSyncSleepSyncedPrefsKey, outcome.sleepSynced);
+    if (outcome.stepsSkipReason != null) {
+      await prefs.setString(_healthSyncStepsSkipReasonPrefsKey, outcome.stepsSkipReason!);
+    } else {
+      await prefs.remove(_healthSyncStepsSkipReasonPrefsKey);
+    }
+    if (outcome.sleepSkipReason != null) {
+      await prefs.setString(_healthSyncSleepSkipReasonPrefsKey, outcome.sleepSkipReason!);
+    } else {
+      await prefs.remove(_healthSyncSleepSkipReasonPrefsKey);
+    }
   }
 
   Future<void> recordFailure(String message) async {
-    state = HealthSyncStatus(lastSyncedAt: state.lastSyncedAt, lastError: message);
+    state = HealthSyncStatus(
+      lastSyncedAt: state.lastSyncedAt,
+      lastError: message,
+      lastOutcome: state.lastOutcome,
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_healthSyncLastErrorPrefsKey, message);
   }
@@ -82,8 +114,8 @@ final healthSyncStatusProvider =
 /// Rethrows on failure — callers that want to stay silent should catch it.
 Future<void> performHealthSync(WidgetRef ref, {required double bodyWeightKg}) async {
   try {
-    await HealthSyncService.instance.syncToday(bodyWeightKg: bodyWeightKg);
-    await ref.read(healthSyncStatusProvider.notifier).recordSuccess();
+    final outcome = await HealthSyncService.instance.syncToday(bodyWeightKg: bodyWeightKg);
+    await ref.read(healthSyncStatusProvider.notifier).recordSuccess(outcome);
   } catch (e) {
     await ref.read(healthSyncStatusProvider.notifier).recordFailure(e.toString());
     rethrow;

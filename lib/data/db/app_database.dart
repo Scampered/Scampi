@@ -152,6 +152,17 @@ class AppDatabase {
         'ALTER TABLE user_profile ADD COLUMN cheat_day_bonus_kcal INTEGER NOT NULL DEFAULT 300;',
       );
     }
+
+    if (oldVersion < 9) {
+      // v9 adds: food_log_items — a per-instance ingredient snapshot for
+      // entries logged from a multi-ingredient meal/AI import, so editing
+      // one later can adjust individual ingredients or a servings
+      // multiplier instead of only a single grams/macro field. Existing
+      // entries simply have no rows here and keep using the old
+      // single-food editing path.
+      await db.execute(ScampiSchema.createFoodLogItems);
+      await db.execute(ScampiSchema.createFoodLogItemsFoodLogIndex);
+    }
   }
 
   /// Closes the database connection. Mainly useful for tests; the app

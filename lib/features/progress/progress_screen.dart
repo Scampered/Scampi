@@ -49,8 +49,18 @@ class _WeeklyCalorieCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final days = summary.weeklyCalories;
-    final maxConsumed = days.map((d) => d.consumed).fold<double>(0, (a, b) => a > b ? a : b);
-    final chartMax = [maxConsumed, summary.calorieGoal.toDouble()].reduce((a, b) => a > b ? a : b) * 1.15;
+    final nets = days.map((d) => d.net).toList();
+    final goals = days.map((d) => d.goal.toDouble()).toList();
+    final highest = [...nets, ...goals].fold<double>(0, (a, b) => a > b ? a : b);
+    final lowest = nets.fold<double>(0, (a, b) => a < b ? a : b);
+    // Headroom above the tallest bar/goal line, and room below zero for
+    // a day where burned calories exceeded eaten (a legitimately
+    // negative net) — without this, such a day's bar either got clipped
+    // or the chart's own scale silently ignored it, which is almost
+    // certainly what "goes off screen" was actually seeing here.
+    final chartMax = highest <= 0 ? 2000.0 : highest * 1.2;
+    final chartMin = lowest >= 0 ? 0.0 : (lowest * 1.2).floorToDouble();
+    final cheatDayIndex = days.indexWhere((d) => d.isCheatDay);
 
     return Card(
       child: Padding(
@@ -61,15 +71,16 @@ class _WeeklyCalorieCard extends StatelessWidget {
             Text('This Week', style: theme.textTheme.titleMedium),
             const SizedBox(height: 2),
             Text(
-              'Calories eaten each day vs your ${summary.calorieGoal} kcal goal',
+              'Net calories (eaten − burned) each day vs your goal',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: ScampiSpacing.md),
             SizedBox(
-              height: 180,
+              height: 200,
               child: BarChart(
                 BarChartData(
-                  maxY: chartMax <= 0 ? 2000 : chartMax,
+                  maxY: chartMax,
+                  minY: chartMin,
                   alignment: BarChartAlignment.spaceAround,
                   gridData: const FlGridData(show: false),
                   borderData: FlBorderData(show: false),
@@ -87,7 +98,21 @@ class _WeeklyCalorieCard extends StatelessWidget {
                   ),
                   titlesData: FlTitlesData(
                     leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 20,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index != cheatDayIndex) return const SizedBox.shrink();
+                          return Text(
+                            '+${days[index].goal - summary.calorieGoal} 🎉',
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: ScampiColors.orange, fontWeight: FontWeight.w700),
+                          );
+                        },
+                      ),
+                    ),
                     rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
@@ -108,6 +133,14 @@ class _WeeklyCalorieCard extends StatelessWidget {
                   ),
                   extraLinesData: ExtraLinesData(
                     horizontalLines: [
+                      for (var i = 0; i < days.length; i++)
+                        if (days[i].isCheatDay)
+                          HorizontalLine(
+                            y: days[i].goal.toDouble(),
+                            color: ScampiColors.orange.withValues(alpha: 0.6),
+                            strokeWidth: 1,
+                            dashArray: [6, 4],
+                          ),
                       HorizontalLine(
                         y: summary.calorieGoal.toDouble(),
                         color: theme.colorScheme.outline,
@@ -122,10 +155,10 @@ class _WeeklyCalorieCard extends StatelessWidget {
                         x: i,
                         barRods: [
                           BarChartRodData(
-                            toY: days[i].consumed,
+                            toY: days[i].net,
                             width: 20,
                             borderRadius: BorderRadius.circular(6),
-                            color: days[i].consumed > days[i].goal
+                            color: days[i].net > days[i].goal
                                 ? ScampiColors.orange
                                 : theme.colorScheme.primary,
                           ),
@@ -379,7 +412,13 @@ class _WeightLineChart extends StatelessWidget {
         lineBarsData: [
           LineChartBarData(
             spots: points,
-            isCurved: true,
+            // Straight segments, not curved — with real check-in data
+            // this is often only 2-3 sparse points, and a curve fit
+            // through so few points can render as visually degenerate
+            // (effectively invisible) depending on their spacing. It's
+            // also more honest: a curve implies smooth movement between
+            // points that was never actually measured.
+            isCurved: false,
             color: theme.colorScheme.primary,
             barWidth: 3,
             dotData: FlDotData(

@@ -3,18 +3,11 @@ import '../../data/models/food_log_entry.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
 
-/// Today's food log entries, grouped by meal slot. Watches the refresh
-/// signal so logging or deleting an entry anywhere updates this list
-/// automatically.
-final todayFoodLogProvider = FutureProvider<List<FoodLogEntry>>((ref) async {
-  ref.watch(dataRefreshSignalProvider);
-  final repo = ref.read(foodLogRepositoryProvider);
-  return repo.entriesForDay(DateTime.now());
-});
-
-/// Same as [todayFoodLogProvider], but for an arbitrary day — used by
-/// Home's day-navigator to show/edit a past day's logged food, since the
-/// Food tab itself only ever shows today.
+/// Food log entries for an arbitrary day, grouped by meal slot. Watches
+/// the refresh signal so logging or deleting an entry anywhere updates
+/// this list automatically. Shared by the Food tab and Home's
+/// day-navigator via [selectedDayProvider] so both show/edit the same
+/// day's data.
 final dayFoodLogProvider =
     FutureProvider.family<List<FoodLogEntry>, DateTime>((ref, day) async {
   ref.watch(dataRefreshSignalProvider);

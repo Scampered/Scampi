@@ -21,6 +21,25 @@ const String healthSyncSleepNote = 'Auto-synced from Health Connect';
 const double _strideKm = 0.0008;
 const double _assumedWalkingSpeedKmh = 5.0;
 
+/// What happened on the last [HealthSyncService.syncToday] call, so a
+/// silent no-sync can be told apart from an actual failure — surfaced in
+/// Profile so "it still didn't sync" has a visible, specific reason
+/// (no sleep data in Health Connect vs. a manual entry blocking it) rather
+/// than looking identical to a crash.
+class HealthSyncOutcome {
+  const HealthSyncOutcome({
+    required this.stepsSynced,
+    this.stepsSkipReason,
+    required this.sleepSynced,
+    this.sleepSkipReason,
+  });
+
+  final bool stepsSynced;
+  final String? stepsSkipReason;
+  final bool sleepSynced;
+  final String? sleepSkipReason;
+}
+
 /// Pulls today's steps and last night's sleep from Health Connect (via
 /// [HealthService]) and folds them into Scampi's own logs:
 /// - Steps become a "Walking" exercise entry, replacing any previous
@@ -39,16 +58,23 @@ class HealthSyncService {
   /// real gate is the user's opt-in toggle (checked by callers before
   /// invoking this); here we just attempt the reads and let Health
   /// Connect itself return nothing if access truly isn't there.
-  Future<void> syncToday({
+  Future<HealthSyncOutcome> syncToday({
     required double bodyWeightKg,
   }) async {
-    await _syncSteps(bodyWeightKg: bodyWeightKg);
-    await _syncSleep();
+    final steps = await _syncSteps(bodyWeightKg: bodyWeightKg);
+    final sleep = await _syncSleep();
+    return HealthSyncOutcome(
+      stepsSynced: steps == null,
+      stepsSkipReason: steps,
+      sleepSynced: sleep == null,
+      sleepSkipReason: sleep,
+    );
   }
 
-  Future<void> _syncSteps({required double bodyWeightKg}) async {
+  /// Returns null on success, or a human-readable reason it was skipped.
+  Future<String?> _syncSteps({required double bodyWeightKg}) async {
     final steps = await HealthService.instance.todaySteps();
-    if (steps <= 0) return;
+    if (steps <= 0) return 'No step data found in Health Connect for today yet';
 
     final repo = ExerciseLogRepository();
     final today = DateTime.now();
@@ -81,6 +107,7 @@ class HealthSyncService {
         note: healthSyncStepsNote,
       ),
     );
+    return null;
   }
 
   /// Refreshes today's auto-synced sleep entry on every call — unlike
@@ -92,16 +119,21 @@ class HealthSyncService {
   /// auto-synced entry naturally upserts in place rather than needing an
   /// explicit delete first (unlike `_syncSteps`, which can have multiple
   /// rows per day).
-  Future<void> _syncSleep() async {
+  ///
+  /// Returns null on success, or a human-readable reason it was skipped.
+  Future<String?> _syncSleep() async {
     final today = DateTime.now();
     final repo = SleepLogRepository();
     final existing = await repo.entryForDay(today);
     if (existing != null && existing.note != healthSyncSleepNote) {
-      return; // a manual entry always wins — never overwritten
+      // a manual entry always wins — never overwritten
+      return 'A manually-logged sleep entry already exists for today';
     }
 
     final sleep = await HealthService.instance.lastNightSleep();
-    if (sleep == null) return;
+    if (sleep == null) {
+      return 'No sleep data found in Health Connect for last night';
+    }
 
     await repo.logEntry(
       SleepLogEntry(
@@ -110,5 +142,6 @@ class HealthSyncService {
         note: healthSyncSleepNote,
       ),
     );
+    return null;
   }
 }

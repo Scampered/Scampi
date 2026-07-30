@@ -1,15 +1,13 @@
 {
-  "latest_version": "1.3.0",
-  "version_code": 5,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.3.0/scampi-v1.3.0.apk",
+  "latest_version": "1.4.0",
+  "version_code": 6,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.4.0/scampi-v1.4.0.apk",
   "release_notes": [
-    "Fix: Health Connect sleep sync could get permanently stuck on a stale value for the day — a re-sync now correctly refreshes an auto-synced entry (never a manual one). Auto-synced steps/sleep are now labeled \"(Auto)\" so it's clear which entries came from syncing.",
-    "New exercise types: Stair Climbing and Cricket. \"Gym\" is retired in favor of \"Weight Training\" (old entries still display fine).",
-    "Fix: updating your weight now updates everywhere (Profile was stuck showing your onboarding weight even after new check-ins) — this also fixes the BMR/calorie-goal math silently using a stale weight.",
-    "Fix: the Progress weight graph now shows your trend even when your check-ins are sparser than the selected 1M/6M window, and the calorie/sleep chart tooltips no longer show raw decimal noise.",
-    "New: Home now has a day-navigator — view and edit the last 7 days, not just today (including a mini food log for past days).",
-    "New: tap any logged food item to edit it in place (quantity, meal, macros) instead of deleting and re-logging.",
-    "AI Import: two new checkboxes (both off by default) let you log a one-off result without permanently saving it as a reusable meal or adding its ingredients to \"Your Ingredients\". Single-ingredient imports also now prefill the actual estimated grams instead of defaulting to 100g.",
-    "New: optional weekly Cheat Day (Profile or onboarding) — pick a day and a bonus calorie amount added to that day's goal."
+    "Fix: the weekly calorie chart on Progress now plots NET calories (eaten minus burned), matching the goal math used everywhere else — a workout now actually moves the bar. Each day also uses its own goal, so a past Cheat Day shows correctly, and there's a small \"+bonus\" badge on that day's bar.",
+    "New: Food and Fitness tabs are now day-aware — go back a day on Home, then switch to Food or Fitness, and you'll see (and can add/edit/delete) that same day's entries instead of always today's.",
+    "New: editing a food entry that came from a meal or a multi-ingredient AI import now shows the full ingredient list — adjust a \"servings eaten\" multiplier (e.g. 0.8 for 80%), edit or remove individual ingredients, or add a new one, the same as editing a meal.",
+    "Fix: the Progress weight chart's line should now render correctly instead of appearing to disappear.",
+    "Health Connect: syncing now reports exactly what happened for steps and sleep (synced, or skipped with a reason like \"no sleep data found\" or \"a manual entry already exists\") instead of a sync looking identical whether it worked or not.",
+    "Cheat Day settings now collapse to a simple \"Every {Day}\" summary with an Edit button once saved, instead of always showing the full picker."
   ]
 }

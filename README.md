@@ -5,7 +5,7 @@ tracker. No accounts, no login, no cloud, no subscriptions — everything
 lives on the device. Distributed as a sideloaded APK via GitHub Releases
 (not the Play Store), with a built-in self-updater.
 
-## Status: v1.3.0 — feature-complete for daily use
+## Status: v1.4.0 — feature-complete for daily use
 
 All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
 and wired to real SQLite data. In active daily use, driven by real
@@ -43,7 +43,12 @@ an AI import is saved as a reusable meal and/or its ingredients saved to
 "Your Ingredients" — a one-off result can be logged without cluttering
 either list. Tap any already-logged food item to edit it in place
 (quantity, meal slot, or macros directly if it has no linked food row)
-instead of deleting and re-logging.
+instead of deleting and re-logging. An entry logged from a meal or a
+multi-ingredient AI import instead shows meal-builder-style editing: a
+"servings eaten" multiplier that scales every ingredient at once (e.g.
+0.8 if only 80% was eaten), plus tap-to-edit/remove per ingredient and
+an "Add Ingredient" button — the underlying meal template itself is
+never touched, only that one logged entry's own snapshot.
 
 **Fitness** — exercise logging (walking, running, cycling, swimming,
 football, basketball, tennis, weight training, martial arts, hiking,
@@ -64,10 +69,12 @@ use — see below); water droplet tile with quick-add chips and a full
 log/edit/delete sheet; weight check-in (keeps the profile's stored
 weight in sync, so Profile/BMR/calorie-goal never lag behind a new
 check-in); fasting tile; daily tip. A day-navigator (prev/next chevrons,
-up to 7 days back) lets past days be reviewed and edited too — water,
-weight, sleep, and a mini logged-food list with the same tap-to-edit as
-the Food tab; quick actions that only make sense for "right now" (Add
-Food/Exercise, AI Import, Start Fast) are disabled on past days.
+up to 7 days back), shared with the Food and Fitness tabs via
+`selectedDayProvider` — go back a day on Home, then switch to Food or
+Fitness, and both show (and let you add/edit/delete against) that same
+day, not always today. Only "Start Fast" and "Start Live Session" stay
+today-only, since both are inherently real-time state rather than
+retroactive log data.
 
 **Sleep** — manual bedtime/wake-time entry (editable, not just
 add-only); optional Health Connect auto-sync (see below). The sleep
@@ -84,11 +91,16 @@ Suhoor/Iftar times from an **on-device** astronomical calculation
 (`lib/core/utils/prayer_time_calculator.dart` — Fajr/Maghrib from
 lat/lng/date, no network call) using the device's location.
 
-**Progress** — weekly calorie bar chart, weight trend line (1M/6M
-toggle, real date/weight axes — falls back to showing all available
-check-ins if fewer than 2 fall within the selected window, rather than
-hiding the trend entirely), sleep bar chart (recommended-8h reference
-line, hour axis). Tooltips show clean rounded values, not raw floats.
+**Progress** — weekly calorie bar chart plotting **net** calories
+(eaten minus burned, matching the "kcal remaining" math used
+everywhere else, so a workout actually moves the bar), each day
+compared against *that day's own* goal (so a past Cheat Day is
+reflected correctly, with a small "+bonus" badge on its bar); weight
+trend line (1M/6M toggle, real date/weight axes — falls back to
+showing all available check-ins if fewer than 2 fall within the
+selected window, rather than hiding the trend entirely); sleep bar
+chart (recommended-8h reference line, hour axis). Tooltips show clean
+rounded values, not raw floats.
 
 **Health Connect sync** (opt-in, Profile → Health App Connector) —
 reads steps and sleep sessions from Android Health Connect, which
@@ -99,7 +111,11 @@ the same way — a re-sync safely refreshes a stale *auto-synced* sleep
 entry, but a manual entry always wins and is never overwritten. Runs on
 cold start and again whenever you return to the app (debounced to
 ~10 min), and shows a "Last synced"/error status plus a manual "Sync
-Now" button, so a failed sync is visible instead of silent.
+Now" button. The status line reports the *outcome* per item (steps
+synced/skipped, sleep synced/skipped) with a specific reason when
+skipped — e.g. "no sleep data found in Health Connect for last night"
+vs. "a manually-logged entry already exists" — instead of a skip
+looking identical to a silent failure.
 
 **Custom daily reset time** (Profile → Daily Reset Time) — pick when
 "today" rolls over for calorie/water/exercise/sleep tracking instead of
@@ -107,7 +123,9 @@ always assuming midnight, for anyone up late or asleep before it.
 
 **Cheat day** (opt-in, Profile → Cheat Day or during onboarding) — pick
 one day of the week and a bonus calorie amount added to that day's
-goal; editable or turn-off-able anytime.
+goal; editable or turn-off-able anytime. Once a day is picked, the
+settings card collapses to a plain "Every {Day}" summary with an Edit
+button, rather than always showing the full day-picker and bonus field.
 
 **Notifications** — local-only (`flutter_local_notifications`), used
 for the fasting-complete reminder; the infrastructure
@@ -132,6 +150,9 @@ lib/
                                   check and Health Connect sync
 
   core/
+    selected_day_provider.dart — which day Home/Food/Fitness are
+                                  showing (StateProvider<DateTime>,
+                                  defaults to today), shared across tabs
     theme/                     — colors, typography (Dosis, bundled
                                   locally — see note below), ThemeData
     constants/                 — db name/version, AppTab enum
@@ -155,6 +176,8 @@ lib/
 
   data/
     models/                    — UserProfile, Food, FoodLogEntry,
+                                  FoodLogItem (per-ingredient snapshot
+                                  for a meal-derived FoodLogEntry),
                                   ExerciseLogEntry, WaterLogEntry,
                                   WeightLogEntry, SleepLogEntry,
                                   FastingSession

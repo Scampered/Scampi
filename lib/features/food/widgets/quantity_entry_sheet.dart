@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/selected_day_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../data/models/food.dart';
@@ -109,7 +110,7 @@ class _QuantityEntrySheetState extends ConsumerState<QuantityEntrySheet> {
     final entry = FoodLogEntry(
       foodId: widget.food.id,
       foodName: widget.food.name,
-      loggedAt: DateTime.now(),
+      loggedAt: combineDayWithNow(ref.read(selectedDayProvider)),
       mealSlot: _mealSlot,
       quantityMode: _mode,
       grams: _grams,
