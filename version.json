@@ -1,11 +1,10 @@
 {
-  "latest_version": "1.5.1",
-  "version_code": 8,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.1/scampi-v1.5.1.apk",
+  "latest_version": "1.5.2",
+  "version_code": 9,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.2/scampi-v1.5.2.apk",
   "release_notes": [
-    "Fix: the Exercise Details hourly step chart showed the same step count in almost every bar. Health Connect's own per-hour lookup was re-splitting one coarse all-day record evenly across each hour it was asked about; it now reads the raw step records directly, grouped by when they actually happened.",
-    "Fix: Active calories and Distance now also check today's recorded exercise/workout sessions as a source, not just continuous all-day records — some phones (Samsung Health included) only forward those two into Health Connect as part of a workout, never as a running total through an ordinary day.",
-    "New: the Exercise Details card now labels a Distance/Active kcal number as \"estimated from steps\" or \"not synced\" whenever it isn't a real Health Connect reading, instead of looking identical to real data.",
-    "The Health Connect Setup screen now also checks Exercise sessions, and explains the workout-fallback path when Active calories/Distance still show no standalone data."
+    "Fix: the update prompt kept reappearing after installing v1.5.1 — that release's APK was accidentally built before its own version bump, so the app still thought it was v1.5.0 no matter how many times it \"updated.\" Verified this build's version is actually baked in correctly before shipping.",
+    "Fix: the Health Connect Setup screen always reported \"Scampi doesn't have permission\" for Exercise sessions no matter what was granted — Health Connect's own permission model requires an extra Total Calories permission behind the scenes for exercise-session reads that Scampi wasn't declaring, so it could never actually be granted. Added the missing permission.",
+    "Fix: the Exercise Details hourly step chart could show a large single spike (usually at 12 AM) instead of a real distribution. Some phones (Samsung Health included) write one long \"cumulative since midnight\" step record alongside normal short activity records; that long record now gets excluded from the hourly chart instead of distorting it, and a record that spans across an hour boundary is now split proportionally between both hours instead of dumped into just one."
   ]
 }

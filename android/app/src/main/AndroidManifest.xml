@@ -38,12 +38,23 @@
          sources (Samsung Health included) only forward active
          calories/distance as part of a recorded workout, not
          continuously through an ordinary day — see
-         HealthService.todayWorkoutTotals(). -->
+         HealthService.todayWorkoutTotals(). READ_TOTAL_CALORIES_BURNED
+         is declared ONLY because the `health` plugin's own WORKOUT
+         permission bundle silently requires it internally (it reads a
+         workout's calories via a separate TotalCaloriesBurnedRecord
+         permission, not something WORKOUT covers by itself) — without
+         this line, Health Connect can never grant that bundle, so
+         hasPermissions()/requestAuthorization() for WORKOUT would
+         permanently report "not granted" no matter what the user
+         toggles. Scampi's own calorie math never reads
+         TOTAL_CALORIES_BURNED directly (it bakes in BMR, which would
+         double-count against Scampi's TDEE-based goal). -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
     <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
 
     <!-- Live Workout Session: a foreground service (via

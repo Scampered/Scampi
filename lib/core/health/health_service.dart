@@ -97,28 +97,41 @@ class HealthService {
   /// on the Exercise Details card, the same shape as Samsung Health's own
   /// hourly activity bars.
   ///
-  /// Sums raw STEPS records locally, grouped by each record's own start
-  /// time — this deliberately does NOT call
-  /// [_health]'s interval-aggregate once per hour bucket (an earlier
-  /// version did). That approach looked reasonable but produced
-  /// visibly wrong charts in practice: Health Connect's aggregate query
-  /// apportions a record's total *proportionally by time overlap* when
-  /// the queried window only partially covers it, so a single coarse
-  /// record spanning most of the day (which is genuinely how some
-  /// sources, including Samsung Health, write steps — not one row per
-  /// minute) got its total smeared evenly across every hour queried,
-  /// producing a suspiciously uniform bar chart (the same step count in
-  /// nearly every bucket) instead of showing when steps actually
-  /// happened. Bucketing raw records by their own start time avoids
-  /// that reinterpolation and reflects whatever granularity the source
-  /// app actually wrote at.
+  /// Sums raw STEPS records locally rather than calling Health Connect's
+  /// own interval-aggregate once per hour bucket (an earlier version
+  /// did) — that reinterpolated a coarse record's total evenly across
+  /// every hour queried, producing a uniform "same count in every bar"
+  /// chart. This version has been through two iterations on real-device
+  /// Samsung Health data; both real quirks below were found that way,
+  /// not in the emulator:
   ///
-  /// One trade-off: unlike [todaySteps] (which uses the aggregate API
-  /// specifically for its cross-source deduplication), this can
-  /// double-count if more than one source is writing overlapping STEPS
-  /// records for the same walk — acceptable for a "when did this happen"
-  /// chart, but means the bars won't necessarily sum to exactly the same
-  /// total as the headline steps stat.
+  /// 1. A record's own span can straddle an hour boundary — split its
+  ///    value proportionally by how many minutes of it actually fall in
+  ///    each bucket, rather than dumping the whole thing into whichever
+  ///    bucket contains its start time.
+  /// 2. Some sources (confirmed on Samsung Health) write one extra,
+  ///    very long "cumulative since midnight" STEPS record alongside
+  ///    the normal short per-activity ones — a known Health Connect
+  ///    pattern where the phone's OS-level step-counter sensor
+  ///    periodically flushes a running daily total as its own record.
+  ///    Proportionally splitting *that* record smears its (large) value
+  ///    across every hour it spans, which is exactly what produced a
+  ///    misleadingly uniform chart before; bucketing it only by its
+  ///    start time instead dumps the same large value entirely into a
+  ///    single hour, producing a misleading spike there instead (this
+  ///    was the very next thing observed after the first fix). Neither
+  ///    treatment is meaningful for a record with no real per-minute
+  ///    granularity in the first place, so [_maxAttributableRecordSpan]
+  ///    is used to exclude such records from the *chart* entirely — the
+  ///    headline steps stat ([todaySteps]) is unaffected since it uses
+  ///    Health Connect's own cross-source aggregate, not this method.
+  ///
+  /// Trade-off: unlike [todaySteps], this doesn't de-duplicate across
+  /// multiple sources writing overlapping STEPS records for the same
+  /// walk — acceptable for a "when did this happen" chart, but means
+  /// the bars won't necessarily sum to exactly the headline steps stat.
+  static const _maxAttributableRecordSpan = Duration(hours: 2);
+
   Future<List<int>> stepsByHour(DateTime day, int resetMinuteOfDay) async {
     await _configure();
     final window = dayWindowFor(day, resetMinuteOfDay);
@@ -137,11 +150,20 @@ class HealthService {
       final value = point.value;
       final steps = value is NumericHealthValue ? value.numericValue.round() : 0;
       if (steps <= 0) continue;
-      final startClamped =
-          point.dateFrom.isBefore(window.start) ? window.start : point.dateFrom;
-      final index = startClamped.difference(window.start).inMinutes ~/ 60;
-      if (index >= 0 && index < 24) {
-        buckets[index] += steps;
+
+      final recordSpan = point.dateTo.difference(point.dateFrom);
+      if (recordSpan > _maxAttributableRecordSpan) continue;
+      final spanMinutes = recordSpan.inMinutes.clamp(1, 1 << 30);
+
+      for (var i = 0; i < 24; i++) {
+        final bucketStart = window.start.add(Duration(hours: i));
+        final bucketEnd = bucketStart.add(const Duration(hours: 1));
+        final overlapStart =
+            point.dateFrom.isAfter(bucketStart) ? point.dateFrom : bucketStart;
+        final overlapEnd = point.dateTo.isBefore(bucketEnd) ? point.dateTo : bucketEnd;
+        final overlapMinutes = overlapEnd.difference(overlapStart).inMinutes;
+        if (overlapMinutes <= 0) continue;
+        buckets[i] += (steps * overlapMinutes / spanMinutes).round();
       }
     }
     return buckets;
