@@ -15,14 +15,27 @@ class ExerciseDetailsSummary {
   const ExerciseDetailsSummary({
     required this.steps,
     required this.distanceKm,
+    required this.distanceIsEstimated,
     required this.activeCalories,
+    required this.activeCaloriesAvailable,
     required this.hourlySteps,
     required this.resetMinuteOfDay,
   });
 
   final int steps;
   final double distanceKm;
+
+  /// True when Health Connect had no real DISTANCE_DELTA data and
+  /// [distanceKm] is only a rough estimate from [steps] — surfaced in
+  /// the UI so an estimate never looks identical to a real synced value.
+  final bool distanceIsEstimated;
+
   final double activeCalories;
+
+  /// False when Health Connect had no real ACTIVE_ENERGY_BURNED data —
+  /// [activeCalories] is then just 0, which needs to read as "not synced
+  /// yet" rather than "burned zero calories today".
+  final bool activeCaloriesAvailable;
 
   /// 24 buckets, index 0 starting at the reset time — see
   /// [HealthService.stepsByHour].
@@ -58,14 +71,29 @@ final exerciseDetailsProvider = FutureProvider<ExerciseDetailsSummary?>((ref) as
   final resetMinuteOfDay = profile?.calorieResetMinuteOfDay ?? 0;
 
   final steps = await HealthService.instance.todaySteps();
-  final distanceKm = await HealthService.instance.todayDistanceKm() ?? (steps * 0.0008);
-  final activeCalories = await HealthService.instance.todayActiveEnergyKcal() ?? 0;
+  final realDistanceKm = await HealthService.instance.todayDistanceKm();
+  final realActiveCalories = await HealthService.instance.todayActiveEnergyKcal();
   final hourlySteps = await HealthService.instance.stepsByHour(DateTime.now(), resetMinuteOfDay);
+
+  // Fall back to today's recorded workout sessions' own embedded totals
+  // before giving up and estimating from steps — some sources (Samsung
+  // Health included) only forward active calories/distance into Health
+  // Connect as part of an exercise session, not as continuous all-day
+  // records. Only bothers with the extra read if at least one of the
+  // two is actually missing.
+  final needsWorkoutFallback = realDistanceKm == null || realActiveCalories == null;
+  final workoutTotals =
+      needsWorkoutFallback ? await HealthService.instance.todayWorkoutTotals() : null;
+
+  final workoutKm = workoutTotals != null && workoutTotals.km > 0 ? workoutTotals.km : null;
+  final workoutKcal = workoutTotals != null && workoutTotals.kcal > 0 ? workoutTotals.kcal : null;
 
   return ExerciseDetailsSummary(
     steps: steps,
-    distanceKm: distanceKm,
-    activeCalories: activeCalories,
+    distanceKm: realDistanceKm ?? workoutKm ?? (steps * 0.0008),
+    distanceIsEstimated: realDistanceKm == null && workoutKm == null,
+    activeCalories: realActiveCalories ?? workoutKcal ?? 0,
+    activeCaloriesAvailable: realActiveCalories != null || workoutKcal != null,
     hourlySteps: hourlySteps,
     resetMinuteOfDay: resetMinuteOfDay,
   );

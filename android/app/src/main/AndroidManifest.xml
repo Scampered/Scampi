@@ -32,11 +32,18 @@
          start a health-type foreground service). READ_ACTIVE_CALORIES_BURNED
          and READ_DISTANCE let Scampi read a wearable's own computed
          calories/distance (heart rate + GPS based) instead of estimating
-         both from step count alone — see health_sync_service.dart. -->
+         both from step count alone — see health_sync_service.dart.
+         READ_EXERCISE lets Scampi read exercise/workout session records
+         as a fallback source for those same two numbers, since some
+         sources (Samsung Health included) only forward active
+         calories/distance as part of a recorded workout, not
+         continuously through an ordinary day — see
+         HealthService.todayWorkoutTotals(). -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
 
     <!-- Live Workout Session: a foreground service (via

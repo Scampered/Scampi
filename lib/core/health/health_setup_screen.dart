@@ -14,6 +14,8 @@ String _labelFor(HealthDataType type) {
       return 'Active calories';
     case HealthDataType.DISTANCE_DELTA:
       return 'Distance';
+    case HealthDataType.WORKOUT:
+      return 'Exercise sessions';
     case HealthDataType.SLEEP_SESSION:
       return 'Sleep (session)';
     case HealthDataType.SLEEP_ASLEEP:
@@ -60,6 +62,7 @@ class _HealthSetupScreenState extends State<HealthSetupScreen> {
     HealthDataType.STEPS,
     HealthDataType.ACTIVE_ENERGY_BURNED,
     HealthDataType.DISTANCE_DELTA,
+    HealthDataType.WORKOUT,
     HealthDataType.SLEEP_SESSION,
   ];
 
@@ -128,9 +131,19 @@ class _HealthSetupScreenState extends State<HealthSetupScreen> {
                           "re-request it."
                       : t.hasData
                           ? 'Permission granted, and Health Connect has recent data.'
-                          : "Permission granted, but Health Connect has nothing for "
-                              "this in the last 30 days — the source app (Samsung "
-                              "Health, etc.) likely isn't forwarding it yet.",
+                          : t.type == HealthDataType.ACTIVE_ENERGY_BURNED ||
+                                  t.type == HealthDataType.DISTANCE_DELTA
+                              ? "Permission granted, but Health Connect has no "
+                                  "standalone data for this in the last 30 days. "
+                                  "Scampi also checks Exercise sessions as a "
+                                  "fallback (some sources, Samsung Health "
+                                  "included, only forward this as part of a "
+                                  "recorded workout, not continuously through the "
+                                  "day) — see Exercise sessions below."
+                              : "Permission granted, but Health Connect has nothing "
+                                  "for this in the last 30 days — the source app "
+                                  "(Samsung Health, etc.) likely isn't forwarding "
+                                  "it yet.",
                 ),
                 const SizedBox(height: ScampiSpacing.xs),
               ],
@@ -146,12 +159,17 @@ class _HealthSetupScreenState extends State<HealthSetupScreen> {
                       const SizedBox(height: ScampiSpacing.xs),
                       const Text(
                         '1. Open Samsung Health → Settings → Health Connect.\n'
-                        '2. Turn on Steps, Active calories, Distance, and Sleep.\n'
+                        '2. Turn on Steps, Active calories, Distance, Exercise, '
+                        'and Sleep.\n'
                         "3. Give it a minute — a watch's data reaches Samsung "
                         "Health first, then Health Connect, so it isn't instant.\n"
                         "4. Health Connect doesn't back-fill: only data from after "
                         "you turn a type on will show up here, not older history.\n"
-                        "5. Come back and tap the refresh icon above.",
+                        "5. If Active calories/Distance still show nothing, check "
+                        "Exercise sessions below instead — some phones only send "
+                        "those two as part of a recorded workout, not "
+                        "continuously through an ordinary day.\n"
+                        "6. Come back and tap the refresh icon above.",
                         style: TextStyle(height: 1.4),
                       ),
                     ],

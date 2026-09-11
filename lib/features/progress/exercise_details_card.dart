@@ -109,13 +109,20 @@ class _ExerciseDetailsBody extends StatelessWidget {
                 label: 'Distance',
                 value: '${details.distanceKm.toStringAsFixed(2)} km',
                 color: ScampiColors.blue,
+                // Distinguishes a real Health Connect reading from the
+                // steps-based fallback estimate — without this, the
+                // estimate looks identical to a real synced value.
+                caption: details.distanceIsEstimated ? 'estimated from steps' : null,
               ),
             ),
             Expanded(
               child: _StatBlock(
                 label: 'Active kcal',
-                value: details.activeCalories.round().toString(),
+                value: details.activeCaloriesAvailable
+                    ? details.activeCalories.round().toString()
+                    : '—',
                 color: ScampiColors.orange,
+                caption: details.activeCaloriesAvailable ? null : 'not synced',
               ),
             ),
           ],
@@ -138,12 +145,21 @@ class _ExerciseDetailsBody extends StatelessWidget {
 }
 
 class _StatBlock extends StatelessWidget {
-  const _StatBlock(
-      {required this.label, required this.value, required this.color});
+  const _StatBlock({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.caption,
+  });
 
   final String label;
   final String value;
   final Color color;
+
+  /// Small note under the value — e.g. "estimated from steps" or "not
+  /// synced" — for when [value] isn't a plain real reading and showing
+  /// it with no distinction would be misleading.
+  final String? caption;
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +174,12 @@ class _StatBlock extends StatelessWidget {
           style: theme.textTheme.titleMedium
               ?.copyWith(color: color, fontWeight: FontWeight.w700),
         ),
+        if (caption != null)
+          Text(
+            caption!,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(fontSize: 9, color: theme.colorScheme.outline),
+          ),
       ],
     );
   }

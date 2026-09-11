@@ -1,15 +1,11 @@
 {
-  "latest_version": "1.5.0",
-  "version_code": 7,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.0/scampi-v1.5.0.apk",
+  "latest_version": "1.5.1",
+  "version_code": 8,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.1/scampi-v1.5.1.apk",
   "release_notes": [
-    "Health Connect: now reads real active-calorie and distance records from your watch/health app (when it writes them) instead of estimating everything from step count alone — numbers should now line up with what that app itself shows.",
-    "Fix: Health Connect sync previously only ever ran via the manual \"Sync Now\" button or reopening the app from the background — a real bug meant a true cold start silently skipped syncing every time. Now fixed.",
-    "New: a \"Not seeing your data? Diagnose\" screen in Profile checks whether Health Connect is installed, whether each permission is granted, and whether it actually has any recent data — the fastest way to find out why something isn't syncing.",
-    "New: Progress has an Exercise Details card — today's steps, distance, and active calories from Health Connect, plus an hourly step chart. A pencil icon at the top of Progress lets you drag its cards into whatever order you prefer.",
-    "New: a sync (↻) button on Home, next to the notification bell, next to the existing one in Profile.",
-    "New: if you've barely touched your Cheat Day's bonus calories, Home offers to move it to the next day instead of losing it.",
-    "New: tap a logged Fitness entry to edit it (category, intensity, duration, distance, calories) instead of deleting and re-logging.",
-    "New: Food and Fitness both show a hint that entries can be tapped to edit or swiped left to remove."
+    "Fix: the Exercise Details hourly step chart showed the same step count in almost every bar. Health Connect's own per-hour lookup was re-splitting one coarse all-day record evenly across each hour it was asked about; it now reads the raw step records directly, grouped by when they actually happened.",
+    "Fix: Active calories and Distance now also check today's recorded exercise/workout sessions as a source, not just continuous all-day records — some phones (Samsung Health included) only forward those two into Health Connect as part of a workout, never as a running total through an ordinary day.",
+    "New: the Exercise Details card now labels a Distance/Active kcal number as \"estimated from steps\" or \"not synced\" whenever it isn't a real Health Connect reading, instead of looking identical to real data.",
+    "The Health Connect Setup screen now also checks Exercise sessions, and explains the workout-fallback path when Active calories/Distance still show no standalone data."
   ]
 }

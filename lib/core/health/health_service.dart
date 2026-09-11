@@ -26,17 +26,29 @@ class HealthService {
   // health app (Samsung Health, etc.) actually writes for "calories
   // burned" and "distance walked" — derived from heart rate/GPS/
   // elevation, not just a step count. Reading these directly (with a
-  // step-count estimate only as a fallback when they're absent) is what
-  // lets Scampi's numbers line up with what the source app itself shows,
+  // step-count estimate only as a last-resort fallback) is what lets
+  // Scampi's numbers line up with what the source app itself shows,
   // instead of recomputing a rougher estimate from steps alone.
+  //
+  // WORKOUT is a second, separate source for those same two numbers:
+  // some sources (Samsung Health included, per real-device testing)
+  // only forward Active calories/Distance into Health Connect as part
+  // of a recorded exercise/workout session's own embedded totals
+  // (`WorkoutHealthValue.totalEnergyBurned`/`totalDistance`), not as
+  // continuous all-day ACTIVE_ENERGY_BURNED/DISTANCE_DELTA records the
+  // way STEPS is written continuously in the background. Reading
+  // WORKOUT and summing today's sessions' embedded totals is what
+  // finds real numbers in that case; see [todayWorkoutTotals].
   static const _types = [
     HealthDataType.STEPS,
     HealthDataType.ACTIVE_ENERGY_BURNED,
     HealthDataType.DISTANCE_DELTA,
+    HealthDataType.WORKOUT,
     HealthDataType.SLEEP_SESSION,
     HealthDataType.SLEEP_ASLEEP,
   ];
   static const _permissions = [
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -85,27 +97,52 @@ class HealthService {
   /// on the Exercise Details card, the same shape as Samsung Health's own
   /// hourly activity bars.
   ///
-  /// Calls Health Connect's own interval-aggregate once per hour rather
-  /// than summing raw STEPS records locally — Health Connect can hold
-  /// overlapping records from more than one source (phone + watch both
-  /// counting the same walk), and only its own aggregate query de-dupes
-  /// that correctly. 24 short calls is not free, but this only runs when
-  /// the user opens the details card, not on every sync.
+  /// Sums raw STEPS records locally, grouped by each record's own start
+  /// time — this deliberately does NOT call
+  /// [_health]'s interval-aggregate once per hour bucket (an earlier
+  /// version did). That approach looked reasonable but produced
+  /// visibly wrong charts in practice: Health Connect's aggregate query
+  /// apportions a record's total *proportionally by time overlap* when
+  /// the queried window only partially covers it, so a single coarse
+  /// record spanning most of the day (which is genuinely how some
+  /// sources, including Samsung Health, write steps — not one row per
+  /// minute) got its total smeared evenly across every hour queried,
+  /// producing a suspiciously uniform bar chart (the same step count in
+  /// nearly every bucket) instead of showing when steps actually
+  /// happened. Bucketing raw records by their own start time avoids
+  /// that reinterpolation and reflects whatever granularity the source
+  /// app actually wrote at.
+  ///
+  /// One trade-off: unlike [todaySteps] (which uses the aggregate API
+  /// specifically for its cross-source deduplication), this can
+  /// double-count if more than one source is writing overlapping STEPS
+  /// records for the same walk — acceptable for a "when did this happen"
+  /// chart, but means the bars won't necessarily sum to exactly the same
+  /// total as the headline steps stat.
   Future<List<int>> stepsByHour(DateTime day, int resetMinuteOfDay) async {
     await _configure();
     final window = dayWindowFor(day, resetMinuteOfDay);
     final now = DateTime.now();
-    final buckets = <int>[];
-    for (var i = 0; i < 24; i++) {
-      final bucketStart = window.start.add(Duration(hours: i));
-      if (bucketStart.isAfter(now)) {
-        buckets.add(0);
-        continue;
+    final effectiveEnd = now.isBefore(window.end) ? now : window.end;
+    if (!effectiveEnd.isAfter(window.start)) return List<int>.filled(24, 0);
+
+    final points = await _health.getHealthDataFromTypes(
+      types: [HealthDataType.STEPS],
+      startTime: window.start,
+      endTime: effectiveEnd,
+    );
+
+    final buckets = List<int>.filled(24, 0);
+    for (final point in points) {
+      final value = point.value;
+      final steps = value is NumericHealthValue ? value.numericValue.round() : 0;
+      if (steps <= 0) continue;
+      final startClamped =
+          point.dateFrom.isBefore(window.start) ? window.start : point.dateFrom;
+      final index = startClamped.difference(window.start).inMinutes ~/ 60;
+      if (index >= 0 && index < 24) {
+        buckets[index] += steps;
       }
-      final bucketEnd = bucketStart.add(const Duration(hours: 1));
-      final effectiveEnd = bucketEnd.isAfter(now) ? now : bucketEnd;
-      final steps = await _health.getTotalStepsInInterval(bucketStart, effectiveEnd);
-      buckets.add(steps ?? 0);
     }
     return buckets;
   }
@@ -151,6 +188,69 @@ class HealthService {
       return sum + (value is NumericHealthValue ? value.numericValue.toDouble() : 0);
     });
     return totalMeters > 0 ? totalMeters / 1000 : null;
+  }
+
+  /// Sums today's WORKOUT (exercise session) records' own embedded
+  /// `totalEnergyBurned`/`totalDistance` — a fallback source for active
+  /// calories/distance when a source only writes those as part of a
+  /// recorded workout rather than as continuous all-day records. See the
+  /// doc comment on [_types] for why this exists. Returns (0, 0) if
+  /// there are no workout sessions today, or the fields were left null.
+  Future<({double kcal, double km})> todayWorkoutTotals() async {
+    await _configure();
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day);
+    final points = await _health.getHealthDataFromTypes(
+      types: [HealthDataType.WORKOUT],
+      startTime: midnight,
+      endTime: now,
+    );
+
+    var kcal = 0.0;
+    var km = 0.0;
+    for (final point in points) {
+      final value = point.value;
+      if (value is! WorkoutHealthValue) continue;
+
+      final energy = value.totalEnergyBurned;
+      if (energy != null) {
+        kcal += _toKilocalories(energy.toDouble(), value.totalEnergyBurnedUnit);
+      }
+      final distance = value.totalDistance;
+      if (distance != null) {
+        km += _toKilometers(distance.toDouble(), value.totalDistanceUnit);
+      }
+    }
+    return (kcal: kcal, km: km);
+  }
+
+  double _toKilocalories(double amount, HealthDataUnit? unit) {
+    switch (unit) {
+      case HealthDataUnit.JOULE:
+        return amount / 4184;
+      case HealthDataUnit.LARGE_CALORIE:
+      case null:
+      case HealthDataUnit.KILOCALORIE:
+        return amount;
+      case HealthDataUnit.SMALL_CALORIE:
+        return amount / 1000;
+      default:
+        return amount;
+    }
+  }
+
+  double _toKilometers(double amount, HealthDataUnit? unit) {
+    switch (unit) {
+      case HealthDataUnit.MILE:
+        return amount * 1.60934;
+      case HealthDataUnit.FOOT:
+        return amount * 0.0003048;
+      case HealthDataUnit.METER:
+      case null:
+        return amount / 1000;
+      default:
+        return amount / 1000;
+    }
   }
 
   /// Total sleep duration for "last night" — sleep sessions ending
