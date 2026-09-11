@@ -5,7 +5,7 @@ tracker. No accounts, no login, no cloud, no subscriptions — everything
 lives on the device. Distributed as a sideloaded APK via GitHub Releases
 (not the Play Store), with a built-in self-updater.
 
-## Status: v1.4.0 — feature-complete for daily use
+## Status: v1.5.0 — feature-complete for daily use
 
 All five tabs (Home, Food, Fitness, Progress, Profile) are fully built
 and wired to real SQLite data. In active daily use, driven by real
@@ -55,13 +55,16 @@ football, basketball, tennis, weight training, martial arts, hiking,
 stair climbing, cricket, other) with MET-based calorie estimates,
 pace-adjusted for distance-trackable categories (walking/running/
 cycling/swimming/hiking) so a faster session burns more than a slower
-one of the same duration. Also **Live Workout Session** — pick one
-exercise + starting intensity and start it live: it runs as a real
-Android foreground service with a persistent, button-actionable
-notification (Pause/Resume, Stop), so it keeps going even if the app is
-backgrounded or closed entirely. Intensity can be changed mid-session;
-calories are computed from the actual time spent at each intensity, not
-just whichever was picked last.
+one of the same duration. Tap any logged entry to edit it in place
+(category, intensity, duration, distance, calories) instead of deleting
+and re-logging — editing turns a Health-Connect auto-synced entry into
+an ordinary manual one, so a later sync won't touch it. Also **Live
+Workout Session** — pick one exercise + starting intensity and start it
+live: it runs as a real Android foreground service with a persistent,
+button-actionable notification (Pause/Resume, Stop), so it keeps going
+even if the app is backgrounded or closed entirely. Intensity can be
+changed mid-session; calories are computed from the actual time spent at
+each intensity, not just whichever was picked last.
 
 **Home dashboard** — calorie ring with an inner water arc and an outer
 semicircle sleep arc (only shown once sleep tracking is actually in
@@ -95,27 +98,42 @@ lat/lng/date, no network call) using the device's location.
 (eaten minus burned, matching the "kcal remaining" math used
 everywhere else, so a workout actually moves the bar), each day
 compared against *that day's own* goal (so a past Cheat Day is
-reflected correctly, with a small "+bonus" badge on its bar); weight
+reflected correctly, with a small "+bonus" badge on its bar); an
+**Exercise Details** card (today's steps/distance/active calories from
+Health Connect, plus an hourly step bar from the daily reset time,
+styled after a typical wearable app's own activity screen); weight
 trend line (1M/6M toggle, real date/weight axes — falls back to
 showing all available check-ins if fewer than 2 fall within the
 selected window, rather than hiding the trend entirely); sleep bar
 chart (recommended-8h reference line, hour axis). Tooltips show clean
-rounded values, not raw floats.
+rounded values, not raw floats. A pencil icon at the top lets you
+drag-reorder these cards; the order is remembered.
 
 **Health Connect sync** (opt-in, Profile → Health App Connector) —
-reads steps and sleep sessions from Android Health Connect, which
-Google Fit, Samsung Health, and most wearable apps already write into.
-Steps become an auto-logged "Walking" exercise entry (replaced on
-re-sync, never duplicated, labeled "Auto" in the log); sleep fills in
-the same way — a re-sync safely refreshes a stale *auto-synced* sleep
-entry, but a manual entry always wins and is never overwritten. Runs on
-cold start and again whenever you return to the app (debounced to
-~10 min), and shows a "Last synced"/error status plus a manual "Sync
-Now" button. The status line reports the *outcome* per item (steps
-synced/skipped, sleep synced/skipped) with a specific reason when
-skipped — e.g. "no sleep data found in Health Connect for last night"
-vs. "a manually-logged entry already exists" — instead of a skip
-looking identical to a silent failure.
+reads steps, active calories, distance, and sleep sessions from Android
+Health Connect, which Samsung Health and most wearable apps already
+write into. When a wearable has already computed real active
+calories/distance (from heart rate or GPS), Scampi uses those numbers
+directly instead of estimating from step count — so they line up with
+what the source app itself shows; the step-based estimate is only a
+fallback for a source that doesn't write the richer types. All of it
+becomes an auto-logged "Walking" exercise entry (replaced on re-sync,
+never duplicated, labeled "Auto" in the log, and reduced by whatever's
+separately logged by hand that day so a manual workout on top doesn't
+double-count); sleep fills in the same way — a re-sync safely refreshes
+a stale *auto-synced* sleep entry, but a manual entry always wins and is
+never overwritten. Runs on cold start and again whenever you return to
+the app (debounced to ~10 min), and shows a "Last synced"/error status
+plus a manual "Sync Now" button (also available as a `↻` icon on Home).
+The status line reports the *outcome* per item with a specific reason
+when skipped — e.g. "no sleep data found in Health Connect for last
+night" vs. "a manually-logged entry already exists" — instead of a skip
+looking identical to a silent failure. A "Not seeing your data?
+Diagnose" link opens a setup screen checking Health Connect's install
+status, Scampi's per-type permissions, and whether Health Connect
+actually has any recent data at all for each type — the most common
+cause of "it's not syncing" is the source app (Samsung Health, etc.)
+simply not forwarding that data type yet, not a bug on Scampi's side.
 
 **Custom daily reset time** (Profile → Daily Reset Time) — pick when
 "today" rolls over for calorie/water/exercise/sleep tracking instead of
@@ -126,6 +144,13 @@ one day of the week and a bonus calorie amount added to that day's
 goal; editable or turn-off-able anytime. Once a day is picked, the
 settings card collapses to a plain "Every {Day}" summary with an Edit
 button, rather than always showing the full day-picker and bonus field.
+While the cheat day is under way, if what's been eaten so far is still
+within 50 kcal of the *normal* (non-bonus) goal, Home offers to move
+that bonus to the next day instead of losing it — a Cheat Day week runs
+Saturday–Friday for this purpose specifically (independent of
+Progress's rolling 7-day chart), so the offer stops once the cheat day
+is already on, or would move to, that Friday boundary. Moves are
+one-week-only and chainable; next week reverts to the normal day.
 
 **Notifications** — local-only (`flutter_local_notifications`), used
 for the fasting-complete reminder; the infrastructure
@@ -166,9 +191,13 @@ lib/
     notifications/
       notification_service.dart — flutter_local_notifications wrapper
     health/
-      health_service.dart       — Health Connect read wrapper
+      health_service.dart       — Health Connect read wrapper (steps,
+                                   active calories, distance, sleep;
+                                   per-type permission/data diagnostics)
       health_sync_controller.dart — persisted opt-in toggle
-      health_sync_service.dart    — steps→exercise, sleep→sleep_log sync
+      health_sync_service.dart    — steps/calories/distance→exercise,
+                                     sleep→sleep_log sync
+      health_setup_screen.dart    — install/permission/data diagnostics
     update/
       update_service.dart       — version.json fetch, semver compare,
                                    APK download + install handoff
@@ -180,7 +209,7 @@ lib/
                                   for a meal-derived FoodLogEntry),
                                   ExerciseLogEntry, WaterLogEntry,
                                   WeightLogEntry, SleepLogEntry,
-                                  FastingSession
+                                  FastingSession, CheatDayOverride
     db/
       scampi_schema.dart        — raw SQL schema, all tables + indexes
       app_database.dart          — singleton open/create/migrate (see
@@ -197,7 +226,8 @@ lib/
                                     custom ingredient edit/delete
     fitness/                    — exercise log + entry sheet
     fasting/                    — start/active fast sheets
-    progress/                   — weekly/weight/sleep charts
+    progress/                   — weekly/weight/sleep charts, Exercise
+                                    Details card, drag-to-reorder layout
     onboarding/                 — first-run AND edit-profile form
     profile/                    — profile, Health Connect toggle, daily
                                     reset time, updates section
@@ -264,6 +294,16 @@ on next launch (or via Profile → Check for Updates).
   background — no WorkManager integration (the Live Workout Session's
   foreground service is separate and only runs while a session is
   active).
+- No direct Samsung Health / Google Fit / vendor-specific SDK
+  integration, by design — Google Fit's API is deprecated/shut down,
+  and the Samsung Health Data SDK requires Samsung partner approval per
+  app that a sideloaded `com.example.scampi` build isn't eligible for.
+  Health Connect is the intended aggregation layer for all of them; see
+  the Health Connect Setup screen (Profile → "Not seeing your data?
+  Diagnose") for narrowing down a specific sync gap.
+- Exercise session (`WORKOUT`) records and hourly distance/calories bars
+  aren't read from Health Connect yet — the Exercise Details card is
+  steps/distance/active-calories totals plus an hourly *steps* bar only.
 - Native home-screen widgets are not built (deferred; would need a
   `home_widget`-based native Android `RemoteViews` layer, since there's
   no way to share Dart logic directly with a widget).

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../../core/health/health_sync_controller.dart';
 import '../../core/selected_day_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/calorie_calculator.dart';
+import '../../data/models/cheat_day_override.dart';
 import '../../data/models/water_weight_log.dart';
 import '../../data/repositories/repository_providers.dart';
 import '../../data/repositories/data_refresh_signal.dart';
@@ -56,6 +59,7 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          const _HomeSyncButton(),
           IconButton(
             tooltip: 'Notifications',
             icon: const Icon(Icons.notifications_none_rounded),
@@ -90,6 +94,66 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Manual "sync now" for Health Connect, right in the Home app bar —
+/// the same [performHealthSync] path Profile's "Sync Now" uses, just
+/// without needing to leave Home to reach it. Only shown once the user
+/// has actually turned the connector on in Profile; syncing something
+/// that's off would be confusing (and would silently no-op anyway).
+class _HomeSyncButton extends ConsumerStatefulWidget {
+  const _HomeSyncButton();
+
+  @override
+  ConsumerState<_HomeSyncButton> createState() => _HomeSyncButtonState();
+}
+
+class _HomeSyncButtonState extends ConsumerState<_HomeSyncButton> {
+  bool _syncing = false;
+
+  Future<void> _sync() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    try {
+      final profile = await ref.read(userProfileRepositoryProvider).getProfile();
+      if (profile == null) return;
+      await performHealthSync(ref, bodyWeightKg: profile.weightKg);
+      ref.read(dataRefreshSignalProvider.notifier).bump();
+      if (!mounted) return;
+      final outcome = ref.read(healthSyncStatusProvider).lastOutcome;
+      final parts = <String>[
+        if (outcome?.stepsSynced == true) 'steps' else 'no new steps',
+        if (outcome?.sleepSynced == true) 'sleep' else 'no new sleep',
+      ];
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Synced: ${parts.join(', ')}')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't sync — check Health Connect in Profile.")),
+      );
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = ref.watch(healthSyncEnabledProvider);
+    if (!enabled) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: 'Sync Health Connect',
+      icon: _syncing
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.sync_rounded),
+      onPressed: _syncing ? null : _sync,
     );
   }
 }
@@ -204,6 +268,20 @@ class _HomeContent extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         _CalorieBreakdownRow(summary: summary),
+        if (summary.cheatDaySkipEligible && summary.cheatDaySkipTargetDay != null) ...[
+          const SizedBox(height: 16),
+          Builder(builder: (context) {
+            final dismissedDate = ref.watch(dismissedCheatDaySkipDateProvider);
+            final todayKey = CheatDayOverride.dateKey(selectedDay);
+            if (dismissedDate == todayKey) return const SizedBox.shrink();
+            return _CheatDaySkipCard(
+              targetDay: summary.cheatDaySkipTargetDay!,
+              onDismiss: () => ref
+                  .read(dismissedCheatDaySkipDateProvider.notifier)
+                  .dismissForDate(todayKey),
+            );
+          }),
+        ],
         if (calc != null && calc.warnings.isNotEmpty) ...[
           const SizedBox(height: 16),
           Builder(builder: (context) {
@@ -473,6 +551,94 @@ class _GreetingHeader extends StatelessWidget {
     final text = name.isNotEmpty ? '$greeting, $name 👋' : '$greeting 👋';
 
     return Text(text, style: theme.textTheme.headlineSmall);
+  }
+}
+
+/// "You barely touched your Cheat Day — move it to tomorrow?" offer.
+/// Only ever shown when [HomeDailySummary.cheatDaySkipEligible] is true
+/// (today is the cheat day, it's not the last day of the Cheat Day week,
+/// and calories eaten so far are still within
+/// [cheatDaySkipThresholdKcal] of the normal goal) — see
+/// home_summary_provider.dart.
+class _CheatDaySkipCard extends ConsumerStatefulWidget {
+  const _CheatDaySkipCard({required this.targetDay, required this.onDismiss});
+
+  final DateTime targetDay;
+  final VoidCallback onDismiss;
+
+  @override
+  ConsumerState<_CheatDaySkipCard> createState() => _CheatDaySkipCardState();
+}
+
+class _CheatDaySkipCardState extends ConsumerState<_CheatDaySkipCard> {
+  bool _moving = false;
+
+  Future<void> _move() async {
+    if (_moving) return;
+    setState(() => _moving = true);
+    await skipCheatDayToNextDay(ref, today: DateTime.now());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Cheat Day moved to ${DateFormat('EEEE').format(widget.targetDay)}')),
+    );
+    setState(() => _moving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final targetLabel = DateFormat('EEEE').format(widget.targetDay);
+    return Card(
+      color: ScampiColors.orange.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.fast_forward_rounded, color: ScampiColors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Barely touched your Cheat Day",
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: widget.onDismiss,
+                  tooltip: 'Dismiss',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "You've eaten close to a normal day's amount — move today's bonus to "
+              "$targetLabel instead of losing it?",
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                onPressed: _moving ? null : _move,
+                icon: _moving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_forward_rounded, size: 18),
+                label: Text('Move to $targetLabel'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

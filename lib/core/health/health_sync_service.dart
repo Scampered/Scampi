@@ -72,28 +72,49 @@ class HealthSyncService {
   }
 
   /// Returns null on success, or a human-readable reason it was skipped.
+  ///
+  /// Prefers Health Connect's own ACTIVE_ENERGY_BURNED / DISTANCE_DELTA
+  /// records — what a wearable's health app (Samsung Health, etc.)
+  /// actually computed from heart rate/GPS/elevation — over estimating
+  /// from step count alone. The step-based estimate below is now only a
+  /// fallback for a source that writes steps but not those richer types.
   Future<String?> _syncSteps({required double bodyWeightKg}) async {
     final steps = await HealthService.instance.todaySteps();
-    if (steps <= 0) return 'No step data found in Health Connect for today yet';
+    final activeEnergyKcal = await HealthService.instance.todayActiveEnergyKcal();
+    final hcDistanceKm = await HealthService.instance.todayDistanceKm();
+    if (steps <= 0 && activeEnergyKcal == null) {
+      return 'No step or activity data found in Health Connect for today yet';
+    }
 
     final repo = ExerciseLogRepository();
     final today = DateTime.now();
     final existing = await repo.entriesForDay(today);
+    // Manually-logged entries stay untouched, but their calories must be
+    // subtracted out of Health Connect's active-energy total below — that
+    // total already reflects everything the phone/watch saw for the day,
+    // so adding a hand-logged workout on top of it would double-count.
+    var manualCaloriesToday = 0.0;
     for (final entry in existing) {
       if (entry.note == healthSyncStepsNote && entry.id != null) {
         await repo.deleteEntry(entry.id!);
+      } else {
+        manualCaloriesToday += entry.caloriesBurned;
       }
     }
 
-    final distanceKm = steps * _strideKm;
+    final distanceKm = (hcDistanceKm != null && hcDistanceKm > 0) ? hcDistanceKm : steps * _strideKm;
     final durationMinutes = (distanceKm / _assumedWalkingSpeedKmh * 60).round().clamp(1, 24 * 60);
-    final calories = ExerciseLogEntry.estimateCalories(
-      category: ExerciseCategory.walking,
-      intensity: ExerciseIntensity.moderate,
-      durationMinutes: durationMinutes,
-      bodyWeightKg: bodyWeightKg,
-      distanceKm: distanceKm,
-    );
+
+    final usingRealActiveEnergy = activeEnergyKcal != null && activeEnergyKcal > 0;
+    final calories = usingRealActiveEnergy
+        ? (activeEnergyKcal - manualCaloriesToday).clamp(0, double.infinity).toDouble()
+        : ExerciseLogEntry.estimateCalories(
+            category: ExerciseCategory.walking,
+            intensity: ExerciseIntensity.moderate,
+            durationMinutes: durationMinutes,
+            bodyWeightKg: bodyWeightKg,
+            distanceKm: distanceKm,
+          );
 
     await repo.logEntry(
       ExerciseLogEntry(
@@ -103,7 +124,7 @@ class HealthSyncService {
         distanceKm: distanceKm,
         intensity: ExerciseIntensity.moderate,
         caloriesBurned: calories,
-        wasEstimated: true,
+        wasEstimated: !usingRealActiveEnergy,
         note: healthSyncStepsNote,
       ),
     );

@@ -7,6 +7,7 @@ import '../repositories/exercise_log_repository.dart';
 import '../repositories/water_weight_repository.dart';
 import '../repositories/sleep_log_repository.dart';
 import '../repositories/fasting_repository.dart';
+import '../repositories/cheat_day_override_repository.dart';
 import 'data_refresh_signal.dart';
 
 /// Plain repository instance providers. These don't hold UI state
@@ -38,6 +39,9 @@ final sleepLogRepositoryProvider =
 
 final fastingRepositoryProvider =
     Provider<FastingRepository>((ref) => FastingRepository());
+
+final cheatDayOverrideRepositoryProvider =
+    Provider<CheatDayOverrideRepository>((ref) => CheatDayOverrideRepository());
 
 /// Whether a profile currently exists — drives [OnboardingGate]. Watches
 /// the refresh signal so it reacts automatically both when onboarding

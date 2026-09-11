@@ -15,8 +15,19 @@ const _healthSyncSleepSkipReasonPrefsKey = 'scampi_health_sleep_skip_reason';
 /// should never be silently on.
 class HealthSyncController extends StateNotifier<bool> {
   HealthSyncController() : super(false) {
-    _load();
+    _loaded = _load();
   }
+
+  /// Resolves once the persisted enabled/disabled flag has actually been
+  /// read from SharedPreferences. `state` starts as the constructor's
+  /// `false` default and only becomes accurate after that async read
+  /// completes — a caller that reads `state` before awaiting this (e.g.
+  /// a cold-start sync firing in the very first frame) would see "off"
+  /// even when the user has it turned on, and silently skip syncing. This
+  /// was the actual cause of Health Connect only ever syncing via the
+  /// manual "Sync Now" button or a resume, never a true cold start.
+  late final Future<void> _loaded;
+  Future<void> get ready => _loaded;
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1,5 +1,6 @@
 import 'package:health/health.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../utils/day_boundary.dart';
 
 /// Thin wrapper around the `health` package (Android Health Connect) —
 /// the on-device hub that Google Fit, Samsung Health, and most fitness
@@ -20,12 +21,24 @@ class HealthService {
   // night) also write alongside it. Requesting both and preferring
   // whichever is actually present avoids silently getting zero results
   // just because a source didn't happen to write stage-level data.
+  //
+  // ACTIVE_ENERGY_BURNED and DISTANCE_DELTA are what a wearable's own
+  // health app (Samsung Health, etc.) actually writes for "calories
+  // burned" and "distance walked" — derived from heart rate/GPS/
+  // elevation, not just a step count. Reading these directly (with a
+  // step-count estimate only as a fallback when they're absent) is what
+  // lets Scampi's numbers line up with what the source app itself shows,
+  // instead of recomputing a rougher estimate from steps alone.
   static const _types = [
     HealthDataType.STEPS,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.DISTANCE_DELTA,
     HealthDataType.SLEEP_SESSION,
     HealthDataType.SLEEP_ASLEEP,
   ];
   static const _permissions = [
+    HealthDataAccess.READ,
+    HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
     HealthDataAccess.READ,
@@ -66,6 +79,80 @@ class HealthService {
     return steps ?? 0;
   }
 
+  /// Steps for [day] (respecting [resetMinuteOfDay]), bucketed into 24
+  /// hourly totals starting at the reset time — e.g. bucket 0 is
+  /// [resetHour, resetHour+1). Powers the "what time of day" step chart
+  /// on the Exercise Details card, the same shape as Samsung Health's own
+  /// hourly activity bars.
+  ///
+  /// Calls Health Connect's own interval-aggregate once per hour rather
+  /// than summing raw STEPS records locally — Health Connect can hold
+  /// overlapping records from more than one source (phone + watch both
+  /// counting the same walk), and only its own aggregate query de-dupes
+  /// that correctly. 24 short calls is not free, but this only runs when
+  /// the user opens the details card, not on every sync.
+  Future<List<int>> stepsByHour(DateTime day, int resetMinuteOfDay) async {
+    await _configure();
+    final window = dayWindowFor(day, resetMinuteOfDay);
+    final now = DateTime.now();
+    final buckets = <int>[];
+    for (var i = 0; i < 24; i++) {
+      final bucketStart = window.start.add(Duration(hours: i));
+      if (bucketStart.isAfter(now)) {
+        buckets.add(0);
+        continue;
+      }
+      final bucketEnd = bucketStart.add(const Duration(hours: 1));
+      final effectiveEnd = bucketEnd.isAfter(now) ? now : bucketEnd;
+      final steps = await _health.getTotalStepsInInterval(bucketStart, effectiveEnd);
+      buckets.add(steps ?? 0);
+    }
+    return buckets;
+  }
+
+  /// Total active-energy (i.e. NOT resting/BMR) calories Health Connect
+  /// has for today, or null if the source app hasn't written any — the
+  /// caller decides what "no data" should fall back to. Deliberately
+  /// separate from [HealthDataType.TOTAL_CALORIES_BURNED], which bakes
+  /// in BMR and would double-count against Scampi's own TDEE-based goal
+  /// if added to it.
+  Future<double?> todayActiveEnergyKcal() async {
+    await _configure();
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day);
+    final points = await _health.getHealthDataFromTypes(
+      types: [HealthDataType.ACTIVE_ENERGY_BURNED],
+      startTime: midnight,
+      endTime: now,
+    );
+    if (points.isEmpty) return null;
+    final total = points.fold<double>(0, (sum, p) {
+      final value = p.value;
+      return sum + (value is NumericHealthValue ? value.numericValue.toDouble() : 0);
+    });
+    return total > 0 ? total : null;
+  }
+
+  /// Total distance Health Connect has for today, in km, or null if
+  /// nothing's been written — same "let the caller pick the fallback"
+  /// shape as [todayActiveEnergyKcal].
+  Future<double?> todayDistanceKm() async {
+    await _configure();
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day);
+    final points = await _health.getHealthDataFromTypes(
+      types: [HealthDataType.DISTANCE_DELTA],
+      startTime: midnight,
+      endTime: now,
+    );
+    if (points.isEmpty) return null;
+    final totalMeters = points.fold<double>(0, (sum, p) {
+      final value = p.value;
+      return sum + (value is NumericHealthValue ? value.numericValue.toDouble() : 0);
+    });
+    return totalMeters > 0 ? totalMeters / 1000 : null;
+  }
+
   /// Total sleep duration for "last night" — sleep sessions ending
   /// between yesterday noon and today noon, which comfortably captures
   /// a normal overnight sleep regardless of exact bed/wake times.
@@ -98,6 +185,44 @@ class HealthService {
     );
     if (stages.isEmpty) return null;
     return _sumDurations(stages);
+  }
+
+  /// Whether the Health Connect app itself is installed on this device —
+  /// distinct from whether Scampi has been granted permission to read
+  /// from it. Used by the setup/diagnostics screen to tell "not
+  /// installed" apart from "installed but nothing's syncing".
+  Future<bool> isHealthConnectInstalled() async {
+    final status = await _health.getHealthConnectSdkStatus();
+    return status == HealthConnectSdkStatus.sdkAvailable;
+  }
+
+  /// Per-type permission status, for the setup/diagnostics screen — the
+  /// bulk [hasPermissions] check only says whether *all* types are
+  /// granted, which isn't enough to tell someone specifically "steps is
+  /// granted but distance isn't".
+  Future<Map<HealthDataType, bool>> permissionStatusByType() async {
+    await _configure();
+    final result = <HealthDataType, bool>{};
+    for (final type in _types) {
+      result[type] = await _health.hasPermissions([type], permissions: [HealthDataAccess.READ]) ??
+          false;
+    }
+    return result;
+  }
+
+  /// Whether Health Connect has ANY record of [type] in the last 30
+  /// days — lets the setup screen distinguish "permission granted but no
+  /// source app is actually writing this data" from a genuine sync
+  /// problem on Scampi's side.
+  Future<bool> hasRecentData(HealthDataType type) async {
+    await _configure();
+    final now = DateTime.now();
+    final points = await _health.getHealthDataFromTypes(
+      types: [type],
+      startTime: now.subtract(const Duration(days: 30)),
+      endTime: now,
+    );
+    return points.isNotEmpty;
   }
 
   Duration? _sumDurations(List<HealthDataPoint> points) {

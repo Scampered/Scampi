@@ -115,6 +115,10 @@ class _FoodLogContentState extends ConsumerState<_FoodLogContent> {
           '${totalCalories.round()} kcal logged $dayWord',
           style: theme.textTheme.titleMedium,
         ),
+        Text(
+          'Tap an entry to edit it, or swipe it left to remove.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+        ),
         const SizedBox(height: ScampiSpacing.md),
         for (final slot in MealSlot.values)
           _MealSection(

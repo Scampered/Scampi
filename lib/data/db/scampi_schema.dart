@@ -229,6 +229,20 @@ class ScampiSchema {
   static const String createFastingSessionsStartIndex =
       'CREATE INDEX idx_fasting_sessions_start_at ON fasting_sessions(start_at);';
 
+  /// One row per Cheat Day "week" (Saturday-starting, see
+  /// `cheatWeekStartFor` in day_boundary.dart) that has been moved from
+  /// `user_profile.cheat_day_of_week` via the Home "skip" action.
+  /// `week_start_date` is a UNIQUE plain-date string (`YYYY-MM-DD`) so
+  /// re-moving within the same week is a natural upsert rather than
+  /// accumulating rows.
+  static const String createCheatDayOverrides = '''
+    CREATE TABLE cheat_day_overrides (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_start_date TEXT NOT NULL UNIQUE,
+      effective_weekday INTEGER NOT NULL
+    );
+  ''';
+
   /// Executed in order on fresh database creation.
   static const List<String> createStatements = [
     createUserProfile,
@@ -256,5 +270,6 @@ class ScampiSchema {
     createSleepLogDateIndex,
     createFastingSessions,
     createFastingSessionsStartIndex,
+    createCheatDayOverrides,
   ];
 }

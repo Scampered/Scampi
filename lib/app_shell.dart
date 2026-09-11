@@ -87,6 +87,13 @@ class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver
   Future<void> _silentHealthSync() async {
     _lastHealthSyncAttempt = DateTime.now();
     try {
+      // Must wait for the persisted toggle to actually load before
+      // trusting it — see HealthSyncController.ready's doc comment. On a
+      // true cold start this callback runs in the very first frame,
+      // before that async SharedPreferences read has had a chance to
+      // finish, so reading `state` directly here would always see the
+      // constructor's "off" default.
+      await ref.read(healthSyncEnabledProvider.notifier).ready;
       final enabled = ref.read(healthSyncEnabledProvider);
       if (!enabled) return;
       final profile = await ref.read(userProfileRepositoryProvider).getProfile();

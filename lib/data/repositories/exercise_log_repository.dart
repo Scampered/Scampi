@@ -16,6 +16,19 @@ class ExerciseLogRepository {
     return db.insert('exercise_log', entry.toMap());
   }
 
+  /// Overwrites an already-logged entry in place (matched by
+  /// [ExerciseLogEntry.id]) — used by the Fitness tab's "tap to edit"
+  /// flow, as opposed to [logEntry], which always inserts a new row.
+  Future<void> updateEntry(ExerciseLogEntry entry) async {
+    final db = await _db;
+    await db.update(
+      'exercise_log',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
+  }
+
   Future<void> deleteEntry(int id) async {
     final db = await _db;
     await db.delete('exercise_log', where: 'id = ?', whereArgs: [id]);

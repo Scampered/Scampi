@@ -71,6 +71,14 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
   final todayStart = DateTime(today.year, today.month, today.day);
   final weekStart = todayStart.subtract(const Duration(days: 6));
 
+  final cheatDayOverrideRepo = ref.read(cheatDayOverrideRepositoryProvider);
+  // A rolling 7-day window can span two different Cheat Day weeks (see
+  // cheatWeekStartFor's doc comment — that "week" is a fixed Sat-Fri
+  // calendar block, unlike this chart's window), so the override lookup
+  // is cached per week-start rather than assumed to be the same for
+  // every day in the loop.
+  final overrideCache = <DateTime, int>{};
+
   final weeklyCalories = <DailyCalorieProgress>[];
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
@@ -79,12 +87,20 @@ final progressSummaryProvider = FutureProvider<ProgressSummary>((ref) async {
       day,
       resetMinuteOfDay: resetMinuteOfDay,
     );
-    // Same check home_summary_provider.dart uses — that day's own goal,
-    // not today's, so a past cheat day is reflected correctly here too.
-    final isCheatDay = profile != null &&
-        profile.cheatDayEnabled &&
-        profile.cheatDayOfWeek == dayWindowFor(day, resetMinuteOfDay).start.weekday;
-    final dayGoal = baseCalorieGoal + (isCheatDay ? profile.cheatDayBonusKcal : 0);
+    // Same check home_summary_provider.dart uses — that day's own
+    // effective cheat weekday (a CheatDayOverride for that week wins
+    // over the profile's normal recurring day), not today's, so a past
+    // or moved cheat day is reflected correctly here too.
+    bool isCheatDay = false;
+    if (profile != null && profile.cheatDayEnabled) {
+      final dayWeekStart = cheatWeekStartFor(day, resetMinuteOfDay);
+      if (!overrideCache.containsKey(dayWeekStart)) {
+        final override = await cheatDayOverrideRepo.forWeek(dayWeekStart);
+        overrideCache[dayWeekStart] = override?.effectiveWeekday ?? profile.cheatDayOfWeek ?? -1;
+      }
+      isCheatDay = overrideCache[dayWeekStart] == dayWindowFor(day, resetMinuteOfDay).start.weekday;
+    }
+    final dayGoal = baseCalorieGoal + (isCheatDay ? profile!.cheatDayBonusKcal : 0);
     weeklyCalories.add(DailyCalorieProgress(
       day: day,
       consumed: totals.calories,

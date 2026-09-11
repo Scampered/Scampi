@@ -28,3 +28,32 @@ final dismissedWarningGoalProvider =
     StateNotifierProvider<DismissedWarningController, int?>(
   (ref) => DismissedWarningController(),
 );
+
+const _dismissedCheatDaySkipDatePrefsKey = 'scampi_dismissed_cheat_day_skip_date';
+
+/// Same idea as [DismissedWarningController], for the Home "skip Cheat
+/// Day" offer — persists the date (`YYYY-MM-DD`) it was last dismissed
+/// for, so closing the offer doesn't just reappear on the next rebuild,
+/// but does come back the next time it's actually a different day's
+/// offer.
+class DismissedCheatDaySkipController extends StateNotifier<String?> {
+  DismissedCheatDaySkipController() : super(null) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getString(_dismissedCheatDaySkipDatePrefsKey);
+  }
+
+  Future<void> dismissForDate(String dateKey) async {
+    state = dateKey;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_dismissedCheatDaySkipDatePrefsKey, dateKey);
+  }
+}
+
+final dismissedCheatDaySkipDateProvider =
+    StateNotifierProvider<DismissedCheatDaySkipController, String?>(
+  (ref) => DismissedCheatDaySkipController(),
+);

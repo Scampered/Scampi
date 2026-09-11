@@ -163,6 +163,13 @@ class AppDatabase {
       await db.execute(ScampiSchema.createFoodLogItems);
       await db.execute(ScampiSchema.createFoodLogItemsFoodLogIndex);
     }
+
+    if (oldVersion < 10) {
+      // v10 adds: cheat_day_overrides — lets a single Cheat Day week's
+      // bonus be moved to the next day (the Home "skip" action) without
+      // touching the user's normal recurring cheat_day_of_week.
+      await db.execute(ScampiSchema.createCheatDayOverrides);
+    }
   }
 
   /// Closes the database connection. Mainly useful for tests; the app

@@ -1,13 +1,15 @@
 {
-  "latest_version": "1.4.0",
-  "version_code": 6,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.4.0/scampi-v1.4.0.apk",
+  "latest_version": "1.5.0",
+  "version_code": 7,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.0/scampi-v1.5.0.apk",
   "release_notes": [
-    "Fix: the weekly calorie chart on Progress now plots NET calories (eaten minus burned), matching the goal math used everywhere else — a workout now actually moves the bar. Each day also uses its own goal, so a past Cheat Day shows correctly, and there's a small \"+bonus\" badge on that day's bar.",
-    "New: Food and Fitness tabs are now day-aware — go back a day on Home, then switch to Food or Fitness, and you'll see (and can add/edit/delete) that same day's entries instead of always today's.",
-    "New: editing a food entry that came from a meal or a multi-ingredient AI import now shows the full ingredient list — adjust a \"servings eaten\" multiplier (e.g. 0.8 for 80%), edit or remove individual ingredients, or add a new one, the same as editing a meal.",
-    "Fix: the Progress weight chart's line should now render correctly instead of appearing to disappear.",
-    "Health Connect: syncing now reports exactly what happened for steps and sleep (synced, or skipped with a reason like \"no sleep data found\" or \"a manual entry already exists\") instead of a sync looking identical whether it worked or not.",
-    "Cheat Day settings now collapse to a simple \"Every {Day}\" summary with an Edit button once saved, instead of always showing the full picker."
+    "Health Connect: now reads real active-calorie and distance records from your watch/health app (when it writes them) instead of estimating everything from step count alone — numbers should now line up with what that app itself shows.",
+    "Fix: Health Connect sync previously only ever ran via the manual \"Sync Now\" button or reopening the app from the background — a real bug meant a true cold start silently skipped syncing every time. Now fixed.",
+    "New: a \"Not seeing your data? Diagnose\" screen in Profile checks whether Health Connect is installed, whether each permission is granted, and whether it actually has any recent data — the fastest way to find out why something isn't syncing.",
+    "New: Progress has an Exercise Details card — today's steps, distance, and active calories from Health Connect, plus an hourly step chart. A pencil icon at the top of Progress lets you drag its cards into whatever order you prefer.",
+    "New: a sync (↻) button on Home, next to the notification bell, next to the existing one in Profile.",
+    "New: if you've barely touched your Cheat Day's bonus calories, Home offers to move it to the next day instead of losing it.",
+    "New: tap a logged Fitness entry to edit it (category, intensity, duration, distance, calories) instead of deleting and re-logging.",
+    "New: Food and Fitness both show a hint that entries can be tapped to edit or swiped left to remove."
   ]
 }

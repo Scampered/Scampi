@@ -25,3 +25,18 @@ DayWindow dayWindowFor(DateTime now, int resetMinuteOfDay) {
       : todayReset;
   return DayWindow(start, start.add(const Duration(days: 1)));
 }
+
+/// The Saturday (date-only) that starts the Cheat Day "week" containing
+/// [day] — Cheat Day is fixed to a Saturday-through-Friday week
+/// regardless of the user's chosen cheat weekday, so "move to the next
+/// day, but never past the end of the week" has a fixed, unambiguous
+/// boundary (Friday) to stop at. This is independent of Progress's
+/// weekly chart, which is a rolling 7-days-ending-today window, not a
+/// fixed calendar week — the two don't need to agree, since this only
+/// exists to key [CheatDayOverride] rows by "which week is this".
+DateTime cheatWeekStartFor(DateTime day, int resetMinuteOfDay) {
+  final logicalDay = dayWindowFor(day, resetMinuteOfDay).start;
+  // DateTime.weekday: Mon=1 .. Sun=7. Saturday=6 is day 0 of this week.
+  final daysSinceSaturday = (logicalDay.weekday - DateTime.saturday + 7) % 7;
+  return logicalDay.subtract(Duration(days: daysSinceSaturday));
+}

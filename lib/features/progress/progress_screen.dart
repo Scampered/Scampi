@@ -6,34 +6,92 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/models/water_weight_log.dart';
 import '../../data/models/sleep_log_entry.dart';
+import 'exercise_details_card.dart';
+import 'progress_layout_provider.dart';
 import 'progress_summary_provider.dart';
 
-/// Progress tab — weekly calorie chart up top (the main one), weight trend
-/// below, and a placeholder for sleep tracking (not built yet).
-class ProgressScreen extends ConsumerWidget {
+/// Progress tab — weekly calorie chart, Exercise Details, weight trend,
+/// and sleep, in whatever order the user has dragged them to (the
+/// pencil icon toggles reorder mode — see [ProgressLayoutController]).
+class ProgressScreen extends ConsumerStatefulWidget {
   const ProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProgressScreen> createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends ConsumerState<ProgressScreen> {
+  bool _reordering = false;
+
+  Widget _cardFor(ProgressCardType type, ProgressSummary summary) {
+    switch (type) {
+      case ProgressCardType.calories:
+        return _WeeklyCalorieCard(summary: summary);
+      case ProgressCardType.exerciseDetails:
+        return const ExerciseDetailsCard();
+      case ProgressCardType.weight:
+        return _WeightTrendCard(history: summary.weightHistory);
+      case ProgressCardType.sleep:
+        return _SleepTrendCard(history: summary.sleepHistory);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final summaryAsync = ref.watch(progressSummaryProvider);
+    final order = ref.watch(progressLayoutProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Progress')),
+      appBar: AppBar(
+        title: const Text('Progress'),
+        actions: [
+          IconButton(
+            tooltip: _reordering ? 'Done reordering' : 'Reorder cards',
+            icon: Icon(_reordering ? Icons.check_rounded : Icons.edit_rounded),
+            onPressed: () => setState(() => _reordering = !_reordering),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: summaryAsync.when(
           skipLoadingOnReload: true,
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, stack) => Center(child: Text('$err')),
-          data: (summary) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              _WeeklyCalorieCard(summary: summary),
-              const SizedBox(height: ScampiSpacing.md),
-              _WeightTrendCard(history: summary.weightHistory),
-              const SizedBox(height: ScampiSpacing.md),
-              _SleepTrendCard(history: summary.sleepHistory),
-            ],
-          ),
+          data: (summary) => _reordering
+              ? ReorderableListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  onReorder: (oldIndex, newIndex) =>
+                      ref.read(progressLayoutProvider.notifier).reorder(oldIndex, newIndex),
+                  children: [
+                    for (final type in order)
+                      Padding(
+                        key: ValueKey(type),
+                        padding: const EdgeInsets.only(bottom: ScampiSpacing.md),
+                        child: Stack(
+                          children: [
+                            AbsorbPointer(child: _cardFor(type, summary)),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Icon(
+                                Icons.drag_handle_rounded,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  children: [
+                    for (final type in order) ...[
+                      _cardFor(type, summary),
+                      const SizedBox(height: ScampiSpacing.md),
+                    ],
+                  ],
+                ),
         ),
       ),
     );

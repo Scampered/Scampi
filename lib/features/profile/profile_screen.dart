@@ -7,6 +7,7 @@ import '../../core/update/update_provider.dart';
 import '../../core/update/update_screen.dart';
 import '../../core/utils/calorie_calculator.dart';
 import '../../core/health/health_service.dart';
+import '../../core/health/health_setup_screen.dart';
 import '../../core/health/health_sync_controller.dart';
 import '../../data/db/app_database.dart';
 import '../../data/models/user_profile.dart';
@@ -312,12 +313,15 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Sync steps and sleep from Google Fit, Samsung Health, or any '
-            'other app that writes to Android Health Connect. Steps show up '
-            'as an auto-logged Walking entry; sleep fills in automatically '
-            "if you haven't already logged it that day. If another app shows "
-            "a different sleep number, that's its own separate estimate — "
-            "this reads exactly what's stored in Health Connect, nothing else.",
+            'Sync steps, calories, distance, and sleep from Samsung Health or '
+            'any other app that writes to Android Health Connect. When a '
+            'wearable has already computed real active calories/distance '
+            "(from heart rate or GPS), Scampi uses those numbers directly "
+            "instead of estimating from steps — so they should match what "
+            "that app itself shows. Sleep fills in automatically if you "
+            "haven't already logged it that day. If a number still looks "
+            "different, this only reads what's stored in Health Connect, "
+            "nothing else — the source app may not be forwarding to it yet.",
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -376,6 +380,19 @@ class _HealthSyncSectionState extends ConsumerState<_HealthSyncSection> {
           if (_error != null) ...[
             const SizedBox(height: 4),
             Text(_error!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+          ],
+          if (enabled) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HealthSetupScreen()),
+                ),
+                icon: const Icon(Icons.troubleshoot_rounded, size: 18),
+                label: const Text('Not seeing your data? Diagnose'),
+              ),
+            ),
           ],
         ],
       ),

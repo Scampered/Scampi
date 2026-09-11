@@ -29,9 +29,14 @@
          Health/wearables) — opt-in via Profile settings. Also satisfies the
          "health" foreground-service-type requirement below (Android
          requires the app to hold ACTIVITY_RECOGNITION or BODY_SENSORS to
-         start a health-type foreground service). -->
+         start a health-type foreground service). READ_ACTIVE_CALORIES_BURNED
+         and READ_DISTANCE let Scampi read a wearable's own computed
+         calories/distance (heart rate + GPS based) instead of estimating
+         both from step count alone — see health_sync_service.dart. -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+    <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
 
     <!-- Live Workout Session: a foreground service (via

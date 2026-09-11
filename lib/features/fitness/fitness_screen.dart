@@ -37,13 +37,15 @@ class FitnessScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isToday ? 'Fitness' : 'Fitness · ${selectedDayLabel(selectedDay)}'),
+        title: Text(
+            isToday ? 'Fitness' : 'Fitness · ${selectedDayLabel(selectedDay)}'),
       ),
       body: entriesAsync.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('$err')),
-        data: (entries) => _FitnessLogContent(entries: entries, isToday: isToday),
+        data: (entries) =>
+            _FitnessLogContent(entries: entries, isToday: isToday),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => openLogSheet(context),
@@ -82,7 +84,8 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(iconForExerciseCategory(session.category), color: ScampiColors.blue),
+                Icon(iconForExerciseCategory(session.category),
+                    color: ScampiColors.blue),
                 const SizedBox(width: ScampiSpacing.xs),
                 Expanded(
                   child: Text(
@@ -92,7 +95,8 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
                 ),
                 Text(
                   formatWorkoutDuration(session.elapsedAsOf(now)),
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -104,15 +108,18 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
                 return ChoiceChip(
                   label: Text(intensity.label),
                   selected: selected,
-                  onSelected: (_) =>
-                      ref.read(workoutSessionControllerProvider.notifier).setIntensity(intensity),
+                  onSelected: (_) => ref
+                      .read(workoutSessionControllerProvider.notifier)
+                      .setIntensity(intensity),
                   selectedColor: selectionColor.withValues(alpha: 0.16),
                   labelStyle: TextStyle(
                     color: selected ? selectionColor : null,
                     fontWeight: selected ? FontWeight.w700 : null,
                   ),
                   side: BorderSide(
-                    color: selected ? selectionColor : theme.colorScheme.outlineVariant,
+                    color: selected
+                        ? selectionColor
+                        : theme.colorScheme.outlineVariant,
                   ),
                 );
               }).toList(),
@@ -122,9 +129,12 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () =>
-                        ref.read(workoutSessionControllerProvider.notifier).togglePause(),
-                    icon: Icon(session.isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                    onPressed: () => ref
+                        .read(workoutSessionControllerProvider.notifier)
+                        .togglePause(),
+                    icon: Icon(session.isRunning
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded),
                     label: Text(session.isRunning ? 'Pause' : 'Resume'),
                   ),
                 ),
@@ -132,12 +142,14 @@ class _ActiveWorkoutSessionCard extends ConsumerWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: ending ? null : onEnd,
-                    style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.error),
                     icon: ending
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.stop_rounded),
                     label: const Text('End'),
@@ -172,14 +184,17 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
   Future<void> _endSession() async {
     if (_ending) return;
     setState(() => _ending = true);
-    final saved = await ref.read(workoutSessionControllerProvider.notifier).end();
+    final saved =
+        await ref.read(workoutSessionControllerProvider.notifier).end();
     ref.read(dataRefreshSignalProvider.notifier).bump();
     if (!mounted) return;
     setState(() => _ending = false);
     final calories = (saved?['calories_burned'] as num?)?.round();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(calories != null ? 'Workout saved: $calories kcal' : 'Workout ended'),
+        content: Text(calories != null
+            ? 'Workout saved: $calories kcal'
+            : 'Workout ended'),
       ),
     );
   }
@@ -187,14 +202,18 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final entries = widget.entries.where((e) => !_removedIds.contains(e.id)).toList();
+    final entries =
+        widget.entries.where((e) => !_removedIds.contains(e.id)).toList();
     // A live session is inherently "right now" — only show/offer it while
     // viewing today, same as Home's "Start Fast".
-    final session = widget.isToday ? ref.watch(workoutSessionControllerProvider) : null;
+    final session =
+        widget.isToday ? ref.watch(workoutSessionControllerProvider) : null;
     final dayWord = widget.isToday ? 'today' : 'that day';
 
-    final totalCalories = entries.fold<double>(0, (sum, e) => sum + e.caloriesBurned);
-    final totalMinutes = entries.fold<int>(0, (sum, e) => sum + e.durationMinutes);
+    final totalCalories =
+        entries.fold<double>(0, (sum, e) => sum + e.caloriesBurned);
+    final totalMinutes =
+        entries.fold<int>(0, (sum, e) => sum + e.durationMinutes);
 
     return Column(
       children: [
@@ -222,6 +241,11 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
                             '$totalMinutes min across ${entries.length} '
                             'session${entries.length == 1 ? '' : 's'}',
                             style: theme.textTheme.bodySmall,
+                          ),
+                          Text(
+                            'Tap an entry to edit it, or swipe it left to remove.',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.outline),
                           ),
                         ],
                       ),
@@ -284,7 +308,11 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
                       const SizedBox(height: ScampiSpacing.md),
                     ],
                     for (final entry in entries)
-                      _ExerciseLogTile(entry: entry, onDelete: () => _delete(entry)),
+                      _ExerciseLogTile(
+                        entry: entry,
+                        onDelete: () => _delete(entry),
+                        onTap: () => _edit(entry),
+                      ),
                   ],
                 ),
         ),
@@ -298,13 +326,23 @@ class _FitnessLogContentState extends ConsumerState<_FitnessLogContent> {
     await ref.read(exerciseLogRepositoryProvider).deleteEntry(entry.id!);
     ref.read(dataRefreshSignalProvider.notifier).bump();
   }
+
+  Future<void> _edit(ExerciseLogEntry entry) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ExerciseLogSheet(existing: entry),
+    );
+  }
 }
 
 class _ExerciseLogTile extends StatelessWidget {
-  const _ExerciseLogTile({required this.entry, required this.onDelete});
+  const _ExerciseLogTile(
+      {required this.entry, required this.onDelete, required this.onTap});
 
   final ExerciseLogEntry entry;
   final VoidCallback onDelete;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +350,8 @@ class _ExerciseLogTile extends StatelessWidget {
     final details = [
       '${entry.durationMinutes} min',
       entry.intensity.label,
-      if (entry.distanceKm != null) '${entry.distanceKm!.toStringAsFixed(1)} km',
+      if (entry.distanceKm != null)
+        '${entry.distanceKm!.toStringAsFixed(1)} km',
       if (entry.note == healthSyncStepsNote) 'Auto',
     ].join(' · ');
 
@@ -332,36 +371,42 @@ class _ExerciseLogTile extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: Card(
         margin: const EdgeInsets.only(bottom: ScampiSpacing.xs),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ScampiSpacing.md,
-            vertical: ScampiSpacing.sm,
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: ScampiColors.blue.withValues(alpha: 0.15),
-                child: Icon(iconForExerciseCategory(entry.category), color: ScampiColors.blue),
-              ),
-              const SizedBox(width: ScampiSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(entry.category.label, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(details, style: theme.textTheme.bodySmall),
-                  ],
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: ScampiRadius.mdBorder,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: ScampiSpacing.md,
+              vertical: ScampiSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: ScampiColors.blue.withValues(alpha: 0.15),
+                  child: Icon(iconForExerciseCategory(entry.category),
+                      color: ScampiColors.blue),
                 ),
-              ),
-              Text(
-                '${entry.caloriesBurned.round()} kcal',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ScampiColors.macroProtein,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(width: ScampiSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(entry.category.label,
+                          style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 2),
+                      Text(details, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Text(
+                  '${entry.caloriesBurned.round()} kcal',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: ScampiColors.macroProtein,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
