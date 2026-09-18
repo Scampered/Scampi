@@ -57,3 +57,32 @@ final dismissedCheatDaySkipDateProvider =
     StateNotifierProvider<DismissedCheatDaySkipController, String?>(
   (ref) => DismissedCheatDaySkipController(),
 );
+
+const _dismissedSetCheatDayKeyPrefsKey = 'scampi_dismissed_set_cheat_day_key';
+
+/// Same idea again, for the "Set as Cheat Day" offer — keyed by
+/// `"<today>_<candidate day>"` rather than just today's date, since a
+/// *better* candidate appearing later the same day (a bigger over-eat)
+/// should still surface even if an earlier, smaller candidate was
+/// already dismissed today.
+class DismissedSetCheatDayController extends StateNotifier<String?> {
+  DismissedSetCheatDayController() : super(null) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getString(_dismissedSetCheatDayKeyPrefsKey);
+  }
+
+  Future<void> dismissForKey(String key) async {
+    state = key;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_dismissedSetCheatDayKeyPrefsKey, key);
+  }
+}
+
+final dismissedSetCheatDayKeyProvider =
+    StateNotifierProvider<DismissedSetCheatDayController, String?>(
+  (ref) => DismissedSetCheatDayController(),
+);

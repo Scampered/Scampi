@@ -31,6 +31,35 @@ class MealRepository {
     });
   }
 
+  /// Meals whose own name matches [query], OR that contain at least one
+  /// ingredient whose food name matches — e.g. searching "biryani rice"
+  /// finds both a meal literally named that and any other meal (like
+  /// "Sunday Lunch") that happens to include Biryani Rice as one of its
+  /// ingredients. `DISTINCT` because a meal with more than one matching
+  /// ingredient would otherwise come back once per match.
+  Future<List<Meal>> searchMeals(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    final db = await _db;
+    final likeQuery = '%$trimmed%';
+    final rows = await db.rawQuery(
+      '''
+      SELECT DISTINCT meals.* FROM meals
+      LEFT JOIN meal_items ON meal_items.meal_id = meals.id
+      LEFT JOIN foods ON foods.id = meal_items.food_id
+      WHERE meals.name LIKE ? OR foods.name LIKE ?
+      ORDER BY meals.created_at DESC
+      ''',
+      [likeQuery, likeQuery],
+    );
+    final meals = <Meal>[];
+    for (final row in rows) {
+      final ingredients = await _ingredientsForMeal(db, row['id'] as int);
+      meals.add(Meal.fromMap(row, ingredients: ingredients));
+    }
+    return meals;
+  }
+
   Future<List<Meal>> getAllMeals() async {
     final db = await _db;
     final mealRows = await db.query('meals', orderBy: 'created_at DESC');

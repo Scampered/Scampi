@@ -54,6 +54,13 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
   List<Food> _favorites = [];
   List<Food> _recent = [];
   List<Meal> _meals = [];
+
+  /// Meals matching the current typed search — by the meal's own name or
+  /// by name of any ingredient it contains (e.g. "biryani rice" finds a
+  /// meal that includes that as an ingredient, not just one named that).
+  /// Only populated for an actual typed query, not a tapped category —
+  /// meals aren't organized by the food category taxonomy.
+  List<Meal> _mealResults = [];
   List<String> _categories = [];
 
   bool get _hasFilter =>
@@ -130,6 +137,7 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
       if (!mounted) return;
       setState(() {
         _results = results;
+        _mealResults = [];
         _loading = false;
       });
       return;
@@ -137,18 +145,28 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
     if (!_hasFilter) {
       setState(() {
         _results = [];
+        _mealResults = [];
         _loading = false;
       });
       return;
     }
     setState(() => _loading = true);
+    final typedQuery = _controller.text.trim();
     final results = await ref.read(foodRepositoryProvider).search(
           _controller.text,
           categories: _selectedCategoryGroup,
         );
+    // Meals aren't picked as meal-builder ingredients (meal_items only
+    // references foods, see _loadDefaults) and aren't organized by the
+    // food category taxonomy, so only search them for an actual typed
+    // query, not a tapped category filter.
+    final mealResults = (!widget.pickerMode && typedQuery.isNotEmpty)
+        ? await ref.read(mealRepositoryProvider).searchMeals(typedQuery)
+        : <Meal>[];
     if (!mounted) return;
     setState(() {
       _results = results;
+      _mealResults = mealResults;
       _loading = false;
     });
   }
@@ -353,6 +371,8 @@ class _FoodSearchScreenState extends ConsumerState<FoodSearchScreen> {
                 ? _ResultsList(
                     results: _results,
                     onTap: _showingCustomIngredients ? _selectCustomIngredient : _selectFood,
+                    meals: _mealResults,
+                    onTapMeal: _selectMeal,
                   )
                 : _DefaultList(
                     recent: _recent,
@@ -646,25 +666,46 @@ class _CategoryTile extends StatelessWidget {
 }
 
 class _ResultsList extends StatelessWidget {
-  const _ResultsList({required this.results, required this.onTap});
+  const _ResultsList({
+    required this.results,
+    required this.onTap,
+    this.meals = const [],
+    this.onTapMeal,
+  });
 
   final List<Food> results;
   final ValueChanged<Food> onTap;
 
+  /// Meals matching the current search (by name or by an ingredient's
+  /// name) — shown as their own section above the plain food results,
+  /// same tile style as the "Your Meals" section on the default list.
+  final List<Meal> meals;
+  final ValueChanged<Meal>? onTapMeal;
+
   @override
   Widget build(BuildContext context) {
-    if (results.isEmpty) return const _EmptyState(showingResults: true);
-    return ListView.separated(
+    if (results.isEmpty && meals.isEmpty) {
+      return const _EmptyState(showingResults: true);
+    }
+    return ListView(
       padding: const EdgeInsets.symmetric(
         horizontal: ScampiSpacing.md,
         vertical: ScampiSpacing.sm,
       ),
-      itemCount: results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: ScampiSpacing.xs),
-      itemBuilder: (context, index) {
-        final food = results[index];
-        return _FoodResultTile(food: food, onTap: () => onTap(food));
-      },
+      children: [
+        if (meals.isNotEmpty) ...[
+          const _SectionHeader('Your Meals'),
+          for (final meal in meals) ...[
+            _MealResultTile(meal: meal, onTap: () => onTapMeal?.call(meal)),
+            const SizedBox(height: ScampiSpacing.xs),
+          ],
+          if (results.isNotEmpty) const SizedBox(height: ScampiSpacing.sm),
+        ],
+        for (var i = 0; i < results.length; i++) ...[
+          _FoodResultTile(food: results[i], onTap: () => onTap(results[i])),
+          if (i != results.length - 1) const SizedBox(height: ScampiSpacing.xs),
+        ],
+      ],
     );
   }
 }

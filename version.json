@@ -1,10 +1,9 @@
 {
-  "latest_version": "1.5.2",
-  "version_code": 9,
-  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.2/scampi-v1.5.2.apk",
+  "latest_version": "1.5.3",
+  "version_code": 10,
+  "apk_url": "https://github.com/Scampered/Scampi/releases/download/v1.5.3/scampi-v1.5.3.apk",
   "release_notes": [
-    "Fix: the update prompt kept reappearing after installing v1.5.1 — that release's APK was accidentally built before its own version bump, so the app still thought it was v1.5.0 no matter how many times it \"updated.\" Verified this build's version is actually baked in correctly before shipping.",
-    "Fix: the Health Connect Setup screen always reported \"Scampi doesn't have permission\" for Exercise sessions no matter what was granted — Health Connect's own permission model requires an extra Total Calories permission behind the scenes for exercise-session reads that Scampi wasn't declaring, so it could never actually be granted. Added the missing permission.",
-    "Fix: the Exercise Details hourly step chart could show a large single spike (usually at 12 AM) instead of a real distribution. Some phones (Samsung Health included) write one long \"cumulative since midnight\" step record alongside normal short activity records; that long record now gets excluded from the hourly chart instead of distorting it, and a record that spans across an hour boundary is now split proportionally between both hours instead of dumped into just one."
+    "New: search now also finds your saved meals, matching either the meal's own name or the name of any ingredient inside it — searching \"biryani rice\" finds a meal named that, and any other meal that just happens to include it.",
+    "New: \"Set as Cheat Day\" on Home — the reverse of the existing \"skip\" offer. If you ate close to (or more than) your Cheat Day amount on some other day this week, you can make that day this week's Cheat Day instead of the one you'd configured, even after the fact (e.g. it's the end of the week, your actual Cheat Day went unused, but you clearly already had one earlier). Re-pickable if you change your mind later in the week."
   ]
 }

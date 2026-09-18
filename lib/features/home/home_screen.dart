@@ -282,6 +282,23 @@ class _HomeContent extends ConsumerWidget {
             );
           }),
         ],
+        if (summary.setCheatDayCandidateDay != null &&
+            summary.setCheatDayCandidateCalories != null) ...[
+          const SizedBox(height: 16),
+          Builder(builder: (context) {
+            final candidateDay = summary.setCheatDayCandidateDay!;
+            final dismissedKey = ref.watch(dismissedSetCheatDayKeyProvider);
+            final key =
+                '${CheatDayOverride.dateKey(selectedDay)}_${CheatDayOverride.dateKey(candidateDay)}';
+            if (dismissedKey == key) return const SizedBox.shrink();
+            return _SetCheatDayCard(
+              candidateDay: candidateDay,
+              candidateCalories: summary.setCheatDayCandidateCalories!,
+              onDismiss: () =>
+                  ref.read(dismissedSetCheatDayKeyProvider.notifier).dismissForKey(key),
+            );
+          }),
+        ],
         if (calc != null && calc.warnings.isNotEmpty) ...[
           const SizedBox(height: 16),
           Builder(builder: (context) {
@@ -633,6 +650,101 @@ class _CheatDaySkipCardState extends ConsumerState<_CheatDaySkipCard> {
                       )
                     : const Icon(Icons.arrow_forward_rounded, size: 18),
                 label: Text('Move to $targetLabel'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "You basically already had a Cheat Day on {day} — set that as this
+/// week's instead?" offer — the reverse of [_CheatDaySkipCard]. Shown
+/// whenever [HomeDailySummary.setCheatDayCandidateDay] finds a day this
+/// Cheat Day week (other than the currently-effective one) that reached
+/// cheat-day-ish calories, most usefully when the *actual* cheat day
+/// goes unused (nothing left to Skip to once it's the last day of the
+/// week) but an earlier day this week clearly already earned it.
+class _SetCheatDayCard extends ConsumerStatefulWidget {
+  const _SetCheatDayCard({
+    required this.candidateDay,
+    required this.candidateCalories,
+    required this.onDismiss,
+  });
+
+  final DateTime candidateDay;
+  final double candidateCalories;
+  final VoidCallback onDismiss;
+
+  @override
+  ConsumerState<_SetCheatDayCard> createState() => _SetCheatDayCardState();
+}
+
+class _SetCheatDayCardState extends ConsumerState<_SetCheatDayCard> {
+  bool _setting = false;
+
+  Future<void> _set() async {
+    if (_setting) return;
+    setState(() => _setting = true);
+    await setDayAsCheatDay(ref, day: widget.candidateDay);
+    if (!mounted) return;
+    final dayLabel = DateFormat('EEEE').format(widget.candidateDay);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$dayLabel is now this week\'s Cheat Day')),
+    );
+    setState(() => _setting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dayLabel = DateFormat('EEEE').format(widget.candidateDay);
+    return Card(
+      color: ScampiColors.orange.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.celebration_rounded, color: ScampiColors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Looks like $dayLabel was already a Cheat Day",
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: widget.onDismiss,
+                  tooltip: 'Dismiss',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'You ate ${widget.candidateCalories.round()} kcal on $dayLabel — set that as '
+              "this week's Cheat Day instead of the usual one?",
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                onPressed: _setting ? null : _set,
+                icon: _setting
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_rounded, size: 18),
+                label: Text('Set $dayLabel as Cheat Day'),
               ),
             ),
           ],
